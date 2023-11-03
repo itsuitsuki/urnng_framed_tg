@@ -1,0 +1,61 @@
+Performing C SOURCE FILE Test CMAKE_HAVE_LIBC_PTHREAD failed with the following output:
+Change Dir: /public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/gmake -f Makefile cmTC_48406/fast && /usr/bin/gmake  -f CMakeFiles/cmTC_48406.dir/build.make CMakeFiles/cmTC_48406.dir/build
+gmake[1]: Entering directory `/public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_48406.dir/src.c.o
+/public/software/gcc/gcc-10.2.0/bin/gcc -DCMAKE_HAVE_LIBC_PTHREAD  -fPIE -o CMakeFiles/cmTC_48406.dir/src.c.o -c /public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp/src.c
+Linking C executable cmTC_48406
+/public/software/cmake/cmake-3.22.0/bin/cmake -E cmake_link_script CMakeFiles/cmTC_48406.dir/link.txt --verbose=1
+/public/software/gcc/gcc-10.2.0/bin/gcc CMakeFiles/cmTC_48406.dir/src.c.o -o cmTC_48406 
+CMakeFiles/cmTC_48406.dir/src.c.o: In function `main':
+src.c:(.text+0x2f): undefined reference to `pthread_create'
+src.c:(.text+0x3b): undefined reference to `pthread_detach'
+src.c:(.text+0x47): undefined reference to `pthread_cancel'
+src.c:(.text+0x58): undefined reference to `pthread_join'
+src.c:(.text+0x6c): undefined reference to `pthread_atfork'
+collect2: error: ld returned 1 exit status
+gmake[1]: *** [cmTC_48406] Error 1
+gmake[1]: Leaving directory `/public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp'
+gmake: *** [cmTC_48406/fast] Error 2
+
+
+Source file was:
+#include <pthread.h>
+
+static void* test_func(void* data)
+{
+  return data;
+}
+
+int main(void)
+{
+  pthread_t thread;
+  pthread_create(&thread, NULL, test_func, NULL);
+  pthread_detach(thread);
+  pthread_cancel(thread);
+  pthread_join(thread, NULL);
+  pthread_atfork(NULL, NULL, NULL);
+  pthread_exit(NULL);
+
+  return 0;
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/gmake -f Makefile cmTC_09f01/fast && /usr/bin/gmake  -f CMakeFiles/cmTC_09f01.dir/build.make CMakeFiles/cmTC_09f01.dir/build
+gmake[1]: Entering directory `/public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_09f01.dir/CheckFunctionExists.c.o
+/public/software/gcc/gcc-10.2.0/bin/gcc   -DCHECK_FUNCTION_EXISTS=pthread_create -fPIE -o CMakeFiles/cmTC_09f01.dir/CheckFunctionExists.c.o -c /public/software/cmake/cmake-3.22.0/share/cmake-3.22/Modules/CheckFunctionExists.c
+Linking C executable cmTC_09f01
+/public/software/cmake/cmake-3.22.0/bin/cmake -E cmake_link_script CMakeFiles/cmTC_09f01.dir/link.txt --verbose=1
+/public/software/gcc/gcc-10.2.0/bin/gcc  -DCHECK_FUNCTION_EXISTS=pthread_create CMakeFiles/cmTC_09f01.dir/CheckFunctionExists.c.o -o cmTC_09f01  -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+gmake[1]: *** [cmTC_09f01] Error 1
+gmake[1]: Leaving directory `/public/home/zhaoyd1/TG_pytorch/masking/tmp/CMakeFiles/CMakeTmp'
+gmake: *** [cmTC_09f01/fast] Error 2
+
+
+
