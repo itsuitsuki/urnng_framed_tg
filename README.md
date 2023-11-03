@@ -12,8 +12,9 @@ The code was tested in `python 3.6` and `pytorch 1.0`.
 Sample train/val/test data is in the `data/` folder. These are the standard datasets from PTB.
 First preprocess the data:
 ```
-python preprocess.py --trainfile data/train.txt --valfile data/valid.txt --testfile data/test.txt 
---outputfile data/ptb --vocabminfreq 1 --lowercase 0 --replace_num 0 --batchsize 16
+python preprocess.py --trainfile data/train.txt --valfile data/valid.txt --testfile data/test.txt --outputfile data/ptb --vocabminfreq 1 --lowercase 0 --replace_num 0 --batchsize 16
+
+python preprocess.py --trainfile data/train_02-21.LDC99T42 --valfile data/dev_24.LDC99T42 --testfile data/test.txt --outputfile data/ptb --vocabminfreq 1 --lowercase 0 --replace_num 0 --batchsize 16
 ```
 Running this will save the following files in the `data/` folder: `ptb-train.pkl`, `ptb-val.pkl`,
 `ptb-test.pkl`, `ptb.dict`. Here `ptb.dict` is the word-idx mapping, and you can change the

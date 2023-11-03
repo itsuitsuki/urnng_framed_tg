@@ -6,7 +6,7 @@ from masking import utils as masking_utils
 from masking import masking_types as types
 import time
 # from helping_utils.logger import configure_logger, get_logger
-logger = get_logger()
+# logger = get_logger()
 class PositionalEmbedding(nn.Module):
     def __init__(self, demb):
         super(PositionalEmbedding, self).__init__()
@@ -77,7 +77,7 @@ class RelMultiHeadAttn(nn.Module):
 
         self.drop = nn.Dropout(dropout)
         self.dropatt = nn.Dropout(dropout)
-        self.o_net = nn.Linear(n_head * d_head, d_model, bias=False)
+        self.o_net = nn.Linear(n_head * d_head, d_model, bias=False)    # output net
 
         self.layer_norm = nn.LayerNorm(d_model)
         # self.layer_norm = nn.Identity()
@@ -221,7 +221,7 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
             elif attn_mask.dim() == 3:
                 attn_score = attn_score.float().masked_fill(
                     ~attn_mask[:,:,:,None], -float('inf')).type_as(attn_score)
-                
+
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
         attn_prob = self.drop(attn_prob)
