@@ -18,3 +18,7 @@
 *.hdf5
 *.dict
 *.pkl
+/.dependencies
+/masking/build
+*/__pycache__
+/__pycache__
