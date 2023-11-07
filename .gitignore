@@ -17,7 +17,7 @@
 *.tar.gz
 *.hdf5
 *.dict
-*.pkl
+# *.pkl
 /.dependencies
 /masking/build
 */__pycache__
