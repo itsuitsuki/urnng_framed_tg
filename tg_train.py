@@ -68,7 +68,7 @@ def tg_main(args):
     else:
         device = 'cpu'
     if args.ckpt_path == '':
-        model = TransformerGrammar(vocab=vocab_size,
+        model = TransformerGrammar(vocab_size=vocab_size,
                      w_dim=args.w_dim,
                      n_head=args.n_head,
                      d_head=args.d_head,
