@@ -22,3 +22,7 @@
 /masking/build
 */__pycache__
 /__pycache__
+/.idea
+*/.idea
+.idea/vcs.xml
+.idea
