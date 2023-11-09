@@ -541,20 +541,20 @@ class TransformerGrammarPlusQNet(nn.Module):
         dropout=0.1,
         dropoutatt=0.0,
         q_dim=20,
-        #  pad_id = 0,
-        #  bos_id = 1,
-        #  eos_id = 2,
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
         idx2word={},
         word2idx={},
         pos_max_len=250,
-        opening_id=None,
-        closing_id=None,
-        pre_lnorm=False,
+        # opening_id=None,
+        # closing_id=None,
+        # pre_lnorm=False,
     ):
         super(TransformerGrammarPlusQNet, self).__init__()
-        self.pad_id = 0
-        self.bos_id = 1
-        self.eos_id = 2
+        self.pad_id = pad_id
+        self.bos_id = bos_id
+        self.eos_id = eos_id
         self.d_emb = w_dim
         self.word2idx = word2idx
         self.idx2word = idx2word
