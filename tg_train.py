@@ -19,12 +19,13 @@ parser.add_argument('--val_file', default='data/ptb-1unk-val.pkl')
 parser.add_argument('--ckpt_path', default='')
 # Model options
 parser.add_argument('--w_dim', default=380, type=int, help='Hidden dimension for LM/TG. Word Embedding Dimension')
-parser.add_argument('--num_layers', default=16, type=int, help='number of layers in LM and the stack LSTM (for RNNG)')
+parser.add_argument('--num_layers', default=16, type=int, help='Number of TG Layers and the stack LSTM (for RNNG)')
 parser.add_argument('--dropout', default=0.5, type=float, help='Dropout rate for Embedding, Position Encoding and\
                     TG Decoder Layers.')
 parser.add_argument('--n_head', default=10, type=int, help='Number of Attention Heads.')
 parser.add_argument('--d_head', default=38, type=int, help='Dimension of Attention Heads.')
-parser.add_argument('--d_inner', default=900, type=int, help='Dimension of Inner Layer in Position-wise Feedforward Net.')
+parser.add_argument('--d_inner', default=900, type=int,
+                    help='Dimension of Inner Layer in Position-wise Feedforward Net.')
 parser.add_argument('--dropoutatt', default=0.1, type=float, help='Dropout rate for Attention Layer.')
 # Optimization options
 parser.add_argument('--count_eos_ppl', default=0, type=int, help='whether to count eos in val PPL')
@@ -40,7 +41,8 @@ parser.add_argument('--samples', default=8, type=int,
 parser.add_argument('--lr', default=1, type=float, help='starting learning rate')
 parser.add_argument('--q_lr', default=0.0001, type=float, help='learning rate for inference network q')
 parser.add_argument('--action_lr', default=0.1, type=float, help='learning rate for action layer')
-parser.add_argument('--lr_decay', default=0.5, type=float, help='After warmup_epochs, we have lr decayed by this param.')
+parser.add_argument('--lr_decay', default=0.5, type=float,
+                    help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_warmup', default=2, type=int, help='KL-Annealing Decay.')
 parser.add_argument('--train_q_epochs', default=2, type=int, help='')
 parser.add_argument('--param_init', default=0.1, type=float, help='parameter initialization (over uniform)')
@@ -50,18 +52,21 @@ parser.add_argument('--gpu', default=0, type=int, help='which gpu to use')
 parser.add_argument('--seed', default=3407, type=int, help='random seed')
 parser.add_argument('--print_every', type=int, default=500, help='print stats after this many batches')
 
+
 def tg_main(args):
+    # 0. Preprocessing
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     train_data = Dataset(args.train_file)
     val_data = Dataset(args.val_file)
     vocab_size = int(train_data.vocab_size)
     print('Train: %d sents / %d batches, Val: %d sents / %d batches' %
-            (train_data.sents.size(0), len(train_data), val_data.sents.size(0),
-             len(val_data)))
+          (train_data.sents.size(0), len(train_data), val_data.sents.size(0),
+           len(val_data)))
     print('Vocab size: %d' % vocab_size)
     if torch.cuda.is_available():
-        try: cuda.set_device(args.gpu)
+        try:
+            cuda.set_device(args.gpu)
         except Exception as e:
             print(f"We caught an exception, but that doesn't matter: {e}")
         device = f'{args.gpu}'
@@ -69,13 +74,13 @@ def tg_main(args):
         device = 'cpu'
     if args.ckpt_path == '':
         model = TransformerGrammar(vocab_size=vocab_size,
-                     w_dim=args.w_dim,
-                     n_head=args.n_head,
-                     d_head=args.d_head,
-                     d_inner=args.d_inner,
-                     dropoutatt=args.dropoutatt,
-                     dropout=args.dropout,
-                     num_layers=args.num_layers)
+                                   w_dim=args.w_dim,
+                                   n_head=args.n_head,
+                                   d_head=args.d_head,
+                                   d_inner=args.d_inner,
+                                   dropoutatt=args.dropoutatt,
+                                   dropout=args.dropout,
+                                   num_layers=args.num_layers)
         if args.param_init > 0:
             for param in model.parameters():
                 param.data.uniform_(-args.param_init, args.param_init)
@@ -85,6 +90,8 @@ def tg_main(args):
         model = checkpoint['model']
     print("model architecture")
     print(model)
+
+    # 1. 把模型参数分成三部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）和action_params（给action layer，但是我们好像没）
     q_params = []
     action_params = []
     model_params = []
@@ -134,8 +141,7 @@ def tg_main(args):
         num_words = 0.
         b = 0
 
-
-        # 
+        #
         for i in np.random.permutation(len(train_data)):
             if args.kl_warmup > 0:
                 kl_pen = min(1., kl_pen + kl_warmup_batch)
@@ -226,7 +232,7 @@ def tg_main(args):
             print('Saving checkpoint to %s' % args.save_path)
             torch.save(checkpoint, args.save_path)
             model.cuda(device=device)
-        else: # ppl is not decreasing
+        else:  # ppl is not decreasing
             if epoch > args.warmup_epochs:
                 lr_decay = 1
         if lr_decay == 1:
@@ -242,7 +248,6 @@ def tg_main(args):
         if args.lr < 0.03:
             break
     print("Finished training!")
-
 
 
 def urnng_main(args):
@@ -306,9 +311,6 @@ def urnng_main(args):
     best_val_ppl, best_val_f1 = eval(val_data, model, samples=args.mc_samples,
                                      count_eos_ppl=args.count_eos_ppl)
     all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
-
-
-
 
     # start training
     while epoch < args.num_epochs:
