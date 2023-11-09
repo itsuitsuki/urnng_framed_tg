@@ -10,12 +10,13 @@ import time
 # from helping_utils.logger import configure_logger, get_logger
 # logger = get_logger()
 class PositionalEmbedding(nn.Module):
+
     def __init__(self, demb):
         super(PositionalEmbedding, self).__init__()
 
         self.demb = demb
 
-        inv_freq = 1 / (10000 ** (torch.arange(0.0, demb, 2.0) / demb))
+        inv_freq = 1 / (10000**(torch.arange(0.0, demb, 2.0) / demb))
         self.register_buffer('inv_freq', inv_freq)
 
     def forward(self, pos_seq, bsz=None):
@@ -29,6 +30,7 @@ class PositionalEmbedding(nn.Module):
 
 
 class PositionwiseFF(nn.Module):
+
     def __init__(self, d_model, d_inner, dropout, pre_lnorm=False):
         super(PositionwiseFF, self).__init__()
 
@@ -37,7 +39,8 @@ class PositionwiseFF(nn.Module):
         self.dropout = dropout
 
         self.CoreNet = nn.Sequential(
-            nn.Linear(d_model, d_inner), nn.ReLU(inplace=True),
+            nn.Linear(d_model, d_inner),
+            nn.ReLU(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(d_inner, d_model),
             nn.Dropout(dropout),
@@ -65,8 +68,16 @@ class PositionwiseFF(nn.Module):
 
 
 class RelMultiHeadAttn(nn.Module):
-    def __init__(self, n_head, d_model, d_head, dropout, tgt_len=None,
-                 ext_len=None, mem_len=None, pre_lnorm=False):
+
+    def __init__(self,
+                 n_head,
+                 d_model,
+                 d_head,
+                 dropout,
+                 tgt_len=None,
+                 ext_len=None,
+                 mem_len=None,
+                 pre_lnorm=False):
         super(RelMultiHeadAttn, self).__init__()
 
         self.n_head = n_head
@@ -76,16 +87,16 @@ class RelMultiHeadAttn(nn.Module):
 
         self.qkv_net = nn.Sequential(
             nn.Linear(d_model, 3 * n_head * d_head, bias=False),
-            nn.Dropout(dropout)
-        )
+            nn.Dropout(dropout))
 
         self.drop = nn.Dropout(dropout)
         self.dropatt = nn.Dropout(dropout)
-        self.o_net = nn.Linear(n_head * d_head, d_model, bias=False)  # output net
+        self.o_net = nn.Linear(n_head * d_head, d_model,
+                               bias=False)  # output net
 
         self.layer_norm = nn.LayerNorm(d_model)
         # self.layer_norm = nn.Identity()
-        self.scale = 1 / (d_head ** 0.5)
+        self.scale = 1 / (d_head**0.5)
 
         self.pre_lnorm = pre_lnorm
 
@@ -103,7 +114,8 @@ class RelMultiHeadAttn(nn.Module):
     def _shift(self, x, qlen, klen, mask, left=False):
         if qlen > 1:
             zero_pad = torch.zeros((x.size(0), qlen - 1, x.size(2), x.size(3)),
-                                   device=x.device, dtype=x.dtype)
+                                   device=x.device,
+                                   dtype=x.dtype)
         else:
             zero_pad = torch.zeros(0, device=x.device, dtype=x.dtype)
 
@@ -120,7 +132,8 @@ class RelMultiHeadAttn(nn.Module):
 
     def _rel_shift(self, x, zero_triu=False):
         zero_pad = torch.zeros((x.size(0), 1, *x.size()[2:]),
-                               device=x.device, dtype=x.dtype)
+                               device=x.device,
+                               dtype=x.dtype)
         x_padded = torch.cat([zero_pad, x], dim=1)
 
         x_padded = x_padded.view(x.size(1) + 1, x.size(0), *x.size()[2:])
@@ -138,12 +151,24 @@ class RelMultiHeadAttn(nn.Module):
 
 
 class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
+
     def __init__(self, *args, **kwargs):
         super(RelPartialLearnableMultiHeadAttn, self).__init__(*args, **kwargs)
 
-        self.r_net = nn.Linear(self.d_model, self.n_head * self.d_head, bias=False)
+        self.r_net = nn.Linear(self.d_model,
+                               self.n_head * self.d_head,
+                               bias=False)
 
-    def forward(self, w, r, r_w_bias, r_r_bias, attn_mask=None, attn_relpos=None, min_len=None, max_len=None, mems=None,
+    def forward(self,
+                w,
+                r,
+                r_w_bias,
+                r_r_bias,
+                attn_mask=None,
+                attn_relpos=None,
+                min_len=None,
+                max_len=None,
+                mems=None,
                 terminal=False):
         qlen, rlen, bsz = w.size(0), r.size(0), w.size(1)  # L, M-m, B
         # print(qlen, rlen)
@@ -154,7 +179,9 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
                 w_heads = self.qkv_net(self.layer_norm(cat))
             else:
                 w_heads = self.qkv_net(cat)
-            r_head_k = self.r_net(r)  # M-m * None * (n_head * d_head) // M-m * B * (n_head * d_head)
+            r_head_k = self.r_net(
+                r
+            )  # M-m * None * (n_head * d_head) // M-m * B * (n_head * d_head)
 
             w_head_q, w_head_k, w_head_v = torch.chunk(w_heads, 3, dim=-1)
             w_head_q = w_head_q[-qlen:]
@@ -167,7 +194,7 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
             r_head_k = self.r_net(r)
 
             w_head_q, w_head_k, w_head_v = torch.chunk(w_heads, 3, dim=-1)
-        # #test    
+        # #test
         # r_heads = self.qkv_net(r)
         # r_head_q, r_head_k, r_head_v = torch.chunk(r_heads, 3, dim=-1)
         # r_head_q = r_head_q.view(rlen, self.n_head, self.d_head)
@@ -175,27 +202,33 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
         # #---
         klen = w_head_k.size(0)
 
-        w_head_q = w_head_q.view(qlen, bsz, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
-        w_head_k = w_head_k.view(klen, bsz, self.n_head, self.d_head)  # qlen x bsz x n_head x d_head
-        w_head_v = w_head_v.view(klen, bsz, self.n_head, self.d_head)  # klen x bsz x n_head x d_head
+        w_head_q = w_head_q.view(qlen, bsz, self.n_head,
+                                 self.d_head)  # qlen x bsz x n_head x d_head
+        w_head_k = w_head_k.view(klen, bsz, self.n_head,
+                                 self.d_head)  # qlen x bsz x n_head x d_head
+        w_head_v = w_head_v.view(klen, bsz, self.n_head,
+                                 self.d_head)  # klen x bsz x n_head x d_head
 
         # if composed and rlen == qlen:
         #     r_head_k = r_head_k.view(rlen, bsz, self.n_head, self.d_head)       # rlen x bsz x n_head x d_head
         # else:
-        r_head_k = r_head_k.view(rlen, self.n_head, self.d_head)  # rlen x n_head x d_head
+        r_head_k = r_head_k.view(rlen, self.n_head,
+                                 self.d_head)  # rlen x n_head x d_head
         # #test
         # r_w_bias = r_head_q[-1]
         # r_r_bias = r_head_q[-1]
         # #---
         #### compute attention score
         rw_head_q = w_head_q + r_w_bias  # L * B * n_head * d_head               # qlen x bsz x n_head x d_head
-        AC = torch.einsum('ibnd,jbnd->ijbn', (rw_head_q, w_head_k))  # qlen x klen x bsz x n_head
+        AC = torch.einsum('ibnd,jbnd->ijbn',
+                          (rw_head_q, w_head_k))  # qlen x klen x bsz x n_head
 
         rr_head_q = w_head_q + r_r_bias
         # if composed and rlen == qlen:
         #     BD = torch.einsum('ibnd,jbnd->ijbn', (rr_head_q, r_head_k))         # qlen x rlen x bsz x n_head
         # else:
-        BD = torch.einsum('ibnd,jnd->ijbn', (rr_head_q, r_head_k))  # qlen x rlen x bsz x n_head
+        BD = torch.einsum('ibnd,jnd->ijbn',
+                          (rr_head_q, r_head_k))  # qlen x rlen x bsz x n_head
 
         if attn_relpos is None:
             BD = self._rel_shift(BD)
@@ -212,7 +245,9 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
             # print(relpos_one_hot.shape)
             attn_relpos = attn_relpos.permute(1, 2, 0)
 
-            BD = BD.gather(1, attn_relpos.unsqueeze(-1).expand(-1, -1, -1, BD.shape[-1]))
+            BD = BD.gather(
+                1,
+                attn_relpos.unsqueeze(-1).expand(-1, -1, -1, BD.shape[-1]))
             # BD = torch.einsum('ijbn,bisj->isbn', BD, relpos_one_hot)                # qlen x klen x bsz x n_head
 
         attn_score = AC + BD
@@ -222,10 +257,12 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
                 attn_score = attn_score.float().masked_fill(
-                    ~attn_mask[:, :, None, None], -float('inf')).type_as(attn_score)
+                    ~attn_mask[:, :, None, None],
+                    -float('inf')).type_as(attn_score)
             elif attn_mask.dim() == 3:
                 attn_score = attn_score.float().masked_fill(
-                    ~attn_mask[:, :, :, None], -float('inf')).type_as(attn_score)
+                    ~attn_mask[:, :, :, None],
+                    -float('inf')).type_as(attn_score)
 
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
@@ -235,8 +272,9 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
         attn_vec = torch.einsum('ijbn,jbnd->ibnd', (attn_prob, w_head_v))
 
         # [qlen x bsz x n_head x d_head]
-        attn_vec = attn_vec.contiguous().view(
-            attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
+        attn_vec = attn_vec.contiguous().view(attn_vec.size(0),
+                                              attn_vec.size(1),
+                                              self.n_head * self.d_head)
 
         ##### linear projection
         attn_out = self.o_net(attn_vec)
@@ -253,27 +291,48 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
 
 
 class TransformerGrammarLayer(nn.Module):
+
     def __init__(self, n_head, d_model, d_head, d_inner, dropoutf, dropouta,
                  **kwargs):
         super(TransformerGrammarLayer, self).__init__()
 
-        self.dec_attn = RelPartialLearnableMultiHeadAttn(n_head, d_model,
-                                                         d_head, dropouta, **kwargs)
-        self.pos_ff = PositionwiseFF(d_model, d_inner, dropoutf,
+        self.dec_attn = RelPartialLearnableMultiHeadAttn(
+            n_head, d_model, d_head, dropouta, **kwargs)
+        self.pos_ff = PositionwiseFF(d_model,
+                                     d_inner,
+                                     dropoutf,
                                      pre_lnorm=kwargs.get('pre_lnorm'))
 
-    def forward(self, dec_inp, r, r_w_bias, r_r_bias, attn_mask=None, attn_relpos=None, min_len=None, max_len=None,
-                mems=None, terminal=False):
-        output = self.dec_attn(dec_inp, r, r_w_bias, r_r_bias,
-                               attn_mask=attn_mask, attn_relpos=attn_relpos,
-                               min_len=min_len, max_len=max_len, mems=mems, terminal=terminal)
+    def forward(self,
+                dec_inp,
+                r,
+                r_w_bias,
+                r_r_bias,
+                attn_mask=None,
+                attn_relpos=None,
+                min_len=None,
+                max_len=None,
+                mems=None,
+                terminal=False):
+        output = self.dec_attn(dec_inp,
+                               r,
+                               r_w_bias,
+                               r_r_bias,
+                               attn_mask=attn_mask,
+                               attn_relpos=attn_relpos,
+                               min_len=min_len,
+                               max_len=max_len,
+                               mems=mems,
+                               terminal=terminal)
         output = self.pos_ff(output)
 
         return output
 
 
 class TransformerGrammar(nn.Module):
-    def __init__(self, vocab_size=10000,
+
+    def __init__(self,
+                 vocab_size=10000,
                  w_dim=380,
                  n_head=10,
                  d_head=38,
@@ -298,7 +357,7 @@ class TransformerGrammar(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         self.emb = nn.Embedding(vocab_size, w_dim)
-        self.emb_scale = w_dim ** 0.5
+        self.emb_scale = w_dim**0.5
         self.projection = nn.Linear(w_dim, vocab_size)
         self.projection.weight = self.emb.weight
 
@@ -308,10 +367,17 @@ class TransformerGrammar(nn.Module):
         self.layers = nn.ModuleList()
 
         for _ in range(num_layers):
-            self.layers.append(TransformerGrammarLayer(n_head, w_dim, d_head,
-                                                       d_inner, dropout, dropoutatt, tgt_len=None,
-                                                       ext_len=None, mem_len=None,
-                                                       pre_lnorm=pre_lnorm))
+            self.layers.append(
+                TransformerGrammarLayer(n_head,
+                                        w_dim,
+                                        d_head,
+                                        d_inner,
+                                        dropout,
+                                        dropoutatt,
+                                        tgt_len=None,
+                                        ext_len=None,
+                                        mem_len=None,
+                                        pre_lnorm=pre_lnorm))
 
         self.pos_emb = PositionalEmbedding(w_dim)
         self.r_w_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
@@ -323,10 +389,16 @@ class TransformerGrammar(nn.Module):
         self.opening_id = opening_id  # tuple (opening_start, opening_end + 1)
         self.closing_id = closing_id  # tuple (closing_start, closing_end + 1)
 
-    def forward(self, input_batch,
-                length,  # 句子的最大长度
-                use_mask=None, document_level=False, return_h=False, max_relative_length=None,
-                min_relative_length=None):
+    def forward(
+            self,
+            input_batch,
+            length,  # 句子的最大长度
+            use_mask=None,
+            document_level=False,
+            return_h=False,
+            return_prob=False,
+            max_relative_length=None,
+            min_relative_length=None):
 
         attn_mask = []
         attn_relpos = []
@@ -345,11 +417,15 @@ class TransformerGrammar(nn.Module):
             inputs = torch.LongTensor(np.array(inputs)).cuda()
             targets = torch.LongTensor(np.array(targets)).cuda()
 
-            attn_mask = torch.tril(torch.ones((length_i, length_i), dtype=torch.uint8)).cuda().bool()
+            attn_mask = torch.tril(
+                torch.ones((length_i, length_i),
+                           dtype=torch.uint8)).cuda().bool()
             attn_mask = attn_mask.unsqueeze(0).expand(batch_size, -1, -1)
             attn_relpos = None
         else:
-            ranges = masking_utils.TokenTypeRanges(self.bos_id, self.pad_id, self.eos_id, self.opening_id,
+            ranges = masking_utils.TokenTypeRanges(self.bos_id, self.pad_id,
+                                                   self.eos_id,
+                                                   self.opening_id,
                                                    self.closing_id)
             maskrules = masking_utils.get_masking_rules(
                 "stack_compose_double_closing_nt",
@@ -357,17 +433,19 @@ class TransformerGrammar(nn.Module):
                 memory_length=512,
                 transparency_prob=0.0,
                 gather_into_new_memory=True,
-                transparency_depth_threshold=-1
-            )
+                transparency_depth_threshold=-1)
 
             for sent in input_batch:
                 src_ = torch.LongTensor(sent[:-1])
                 tgt_ = torch.LongTensor(sent[1:])
                 info_tuple = masking_utils.compute_token_types(
-                    {"inputs": src_, "labels": tgt_}, ranges
-                )
-                chunks = maskrules.chunks_for_sequence(info_tuple['inputs'], info_tuple['inputs_ttypes'],
-                                                       info_tuple['labels'], info_tuple['labels_ttypes'])
+                    {
+                        "inputs": src_,
+                        "labels": tgt_
+                    }, ranges)
+                chunks = maskrules.chunks_for_sequence(
+                    info_tuple['inputs'], info_tuple['inputs_ttypes'],
+                    info_tuple['labels'], info_tuple['labels_ttypes'])
                 chunks = [types.Chunk(None, *chunk) for chunk in chunks]
 
                 if not document_level:
@@ -382,7 +460,8 @@ class TransformerGrammar(nn.Module):
                         mask[i, i] = 1
                     attn_mask.append(np.array(mask))
                     chunk_len = len(chunk.attn_mask[0])
-                    relpos = chunk.attn_relpos[:len(mask), chunk_len:chunk_len + len(mask)]
+                    relpos = chunk.attn_relpos[:len(mask),
+                                               chunk_len:chunk_len + len(mask)]
                     attn_relpos.append(np.array(relpos))
                 else:
                     pass  # TODO: Document level. Remain to be implemented.
@@ -400,7 +479,8 @@ class TransformerGrammar(nn.Module):
         word_emb = self.emb(inputs)
 
         if use_mask == None:
-            pos_emb = self.pos_emb(torch.arange(seq_len, -1, -1.0, device=word_emb.device))
+            pos_emb = self.pos_emb(
+                torch.arange(seq_len, -1, -1.0, device=word_emb.device))
         else:
             if max_relative_length is None:
                 max_relative_length = seq_len
@@ -408,15 +488,25 @@ class TransformerGrammar(nn.Module):
                 min_relative_length = -seq_len
             else:
                 min_relative_length = min_relative_length - 1
-            pos_emb = self.pos_emb(torch.arange(max_relative_length, min_relative_length, -1.0, device=word_emb.device))
+            pos_emb = self.pos_emb(
+                torch.arange(max_relative_length,
+                             min_relative_length,
+                             -1.0,
+                             device=word_emb.device))
 
         core_out = self.dropout(word_emb)
         pos_emb = self.dropout(pos_emb)
         hiddens = []
         hiddens.append(core_out)
         for i, layer in enumerate(self.layers):
-            core_out = layer(core_out, pos_emb, self.r_w_bias, self.r_r_bias, attn_mask=attn_mask,
-                             attn_relpos=attn_relpos, min_len=min_relative_length, max_len=max_relative_length)
+            core_out = layer(core_out,
+                             pos_emb,
+                             self.r_w_bias,
+                             self.r_r_bias,
+                             attn_mask=attn_mask,
+                             attn_relpos=attn_relpos,
+                             min_len=min_relative_length,
+                             max_len=max_relative_length)
             hiddens.append(core_out)
             if i < len(self.layers) - 1:
                 core_out = self.dropout(core_out)
@@ -432,29 +522,35 @@ class TransformerGrammar(nn.Module):
 
         if return_h:
             return loss, core_out
+        elif return_prob:
+            return loss, prob
         else:
             return loss
 
 
 class TransformerGrammarPlusQNet(nn.Module):
-    def __init__(self, vocab_size=10000,
-                 w_dim=380,  # word embedding dim
-                 n_head=10,  # attn head number
-                 d_head=38,  # attn head dim
-                 d_inner=900,  # Dimension of Inner Layer in Position-wise Feedforward Net
-                 num_layers=16,  #
-                 dropout=0.1,
-                 dropoutatt=0.0,
-                 #  pad_id = 0,
-                 #  bos_id = 1,
-                 #  eos_id = 2,
-                 idx2word={},
-                 word2idx={},
-                 opening_id=None,
-                 closing_id=None,
-                 pre_lnorm=False,
 
-                 ):
+    def __init__(
+        self,
+        vocab_size=10000,
+        w_dim=380,  # word embedding dim
+        n_head=10,  # attn head number
+        d_head=38,  # attn head dim
+        d_inner=900,  # Dimension of Inner Layer in Position-wise Feedforward Net
+        num_layers=16,  #
+        dropout=0.1,
+        dropoutatt=0.0,
+        q_dim=20,
+        #  pad_id = 0,
+        #  bos_id = 1,
+        #  eos_id = 2,
+        idx2word={},
+        word2idx={},
+        pos_max_len=250,
+        opening_id=None,
+        closing_id=None,
+        pre_lnorm=False,
+    ):
         super(TransformerGrammarPlusQNet, self).__init__()
         self.pad_id = 0
         self.bos_id = 1
@@ -480,22 +576,148 @@ class TransformerGrammarPlusQNet(nn.Module):
 
         self.left_arc = self.word2idx['(S']
         self.right_arc = self.word2idx['S)']
+        from TreeCRF import ConstituencyTreeCRF
+        self.q_crf = ConstituencyTreeCRF()
+        self.q_pos_emb = nn.Embedding(pos_max_len,
+                                      w_dim)  # pos embedding of Q Net
+        self.q_dim = q_dim
+        self.q_leaf_rnn = nn.LSTM(w_dim,
+                                  q_dim,
+                                  bidirectional=True,
+                                  batch_first=True)
+        self.q_binary = nn.Sequential(nn.Linear(q_dim * 2, q_dim * 2),
+                                      nn.ReLU(), nn.LayerNorm(q_dim * 2),
+                                      nn.Dropout(dropout),
+                                      nn.Linear(q_dim * 2, 1))
+
+        self.dropout = nn.Dropout(dropout)
+        self.emb = nn.Embedding(vocab_size, w_dim)
 
     # utils
     def get_ranges(self, start_token, pad_token, left_arc, right_arc):
-        return masking_utils.TokenTypeRanges(start_token,
-                                             pad_token,
-                                             left_arc,
-                                             right_arc
-                                             )
+        return masking_utils.TokenTypeRanges(start_token, pad_token, left_arc,
+                                             right_arc)
+
+    def generate_left_tree(self, idx):
+        num = len(idx)
+        tree = ''
+        for i in range(num - 1):
+            tree += '( '
+        tree += '0 '
+        for i in range(1, num):
+            tree += str(i) + ' ) '
+        return tree
+
+    def generate_right_tree(self, idx):
+        num = len(idx)
+        tree = ''
+        for i in range(num - 1):
+            tree += '( ' + str(i) + ' '
+        tree += str(num - 1) + ' '
+        for i in range(num - 1):
+            tree += ') '
+        return tree
+
+    def get_span_scores(self, x):
+        # produces the span scores s_ij
+        bos = x.new(x.size(0), 1).fill_(self.bos_id)
+        eos = x.new(x.size(0), 1).fill_(self.eos_id)
+        x = torch.cat([bos, x, eos], 1)
+        x_vec = self.dropout(self.emb(x))
+        pos = torch.arange(0,
+                           x.size(1)).unsqueeze(0).expand_as(x).long().cuda()
+        x_vec = x_vec + self.dropout(self.q_pos_emb(pos))
+        q_h, _ = self.q_leaf_rnn(x_vec)
+        fwd = q_h[:, 1:, :self.q_dim]
+        bwd = q_h[:, :-1, self.q_dim:]
+        fwd_diff = fwd[:, 1:].unsqueeze(1) - fwd[:, :-1].unsqueeze(2)
+        bwd_diff = bwd[:, :-1].unsqueeze(2) - bwd[:, 1:].unsqueeze(1)
+        concat = torch.cat([fwd_diff, bwd_diff], 3)
+        scores = self.q_binary(concat).squeeze(3)
+        return scores
+
+    def get_tree_str(self, idx, tree_bracket):
+        tree_str = ""
+        i = 0
+        while i < len(tree_bracket):
+            c = tree_bracket[i]
+            if c == '(':
+                tree_str += "(S "
+            if c == ')':
+                tree_str += "S) "
+            if c >= '0' and c <= '9':
+                id = 0
+                while i < len(tree_bracket) and tree_bracket[
+                        i] >= '0' and tree_bracket[i] <= '9':
+                    id = id * 10 + int(tree_bracket[i])
+                    i += 1
+                tree_str += self.idx2word[int(idx[id])] + ' '
+                continue
+            i += 1
+        if tree_str[-1] == ' ':
+            tree_str = tree_str[:-1]
+        return tree_str
+
+    def get_tree_id(self, idx, tree_bracket):
+        tree_id = []
+        i = 0
+        while i < len(tree_bracket):
+            c = tree_bracket[i]
+            if c == '(':
+                tree_id.append(self.word2idx['(S'])
+            if c == ')':
+                tree_id.append(self.word2idx['S)'])
+            if c >= '0' and c <= '9':
+                id = 0
+                while i < len(tree_bracket) and tree_bracket[
+                        i] >= '0' and tree_bracket[i] <= '9':
+                    id = id * 10 + int(tree_bracket[i])
+                    i += 1
+                tree_id.append(int(idx[id]))
+                continue
+            i += 1
+        return tree_id
 
     # forward propagation
-    def _forward_TG(self, input_batch, length, use_mask=None, document_level=False, return_h=False,
-                    max_relative_length=None, min_relative_length=None):
-        return self.tg_p_net(input_batch, length, use_mask, document_level, return_h, max_relative_length,
+    def _forward_Q_CRF(self, scores, parse_length, batch_size, samples):
+        # scores: scores = scores / is_temp
+        self.q_crf._forward(scores)
+        self.q_crf._entropy(scores)
+
+        crf_input = scores.unsqueeze(1).expand(batch_size, samples,
+                                               parse_length, parse_length)
+        crf_input = crf_input.contiguous().view(batch_size * samples,
+                                                parse_length, parse_length)
+        for i in range(len(self.q_crf.alpha)):
+            for j in range(len(self.q_crf.alpha)):
+                self.q_crf.alpha[i][j] = self.q_crf.alpha[i][j].unsqueeze(
+                    1).expand(batch_size,
+                              samples).contiguous().view(batch_size * samples)
+        return self.q_crf._sample(crf_input, self.q_crf.alpha)
+
+    def _forward_TG(self,
+                    input_batch,
+                    length,
+                    use_mask=None,
+                    document_level=False,
+                    return_h=False,
+                    max_relative_length=None,
+                    min_relative_length=None):
+        return self.tg_p_net(input_batch, length, use_mask, document_level,
+                             return_h, max_relative_length,
                              min_relative_length)
 
-    def forward(self, x, samples=1, is_temp=1., has_eos=True, mode='default', kl_pen=1.):
+    def forward(
+        self,
+        x,
+        samples=1,  # TODO: Figure out what is `samples`
+        is_temp=1.,
+        has_eos=True,
+        mode='default',
+    ):
+
+        # prepare for masking and original input
+        print("Preparing for Forwarding")
         x = x[:, 1:]
         batch_size, length = x.size(0), x.size(1)
         ranges = self.get_ranges(1, 0, self.left_arc, self.right_arc)
@@ -506,5 +728,132 @@ class TransformerGrammarPlusQNet(nn.Module):
             memory_length=768,
             transparency_prob=0.0,
             gather_into_new_memory=False,
-            transparency_depth_threshold=-1
-        )
+            transparency_depth_threshold=-1)
+
+        if has_eos:
+            parse_length = length - 1
+            parse_x = x[:, :-1]
+        else:
+            parse_length = length
+            parse_x = x
+
+        # q inference net forward
+
+        if mode == 'left':
+            # print(parse_x[0])
+            tree_brackets = []
+            for i in range(batch_size):
+                tree = self.generate_left_tree(parse_x[i])
+                tree_brackets.append(tree)
+        elif mode == 'right':
+            tree_brackets = []
+            for i in range(batch_size):
+                tree = self.generate_right_tree(parse_x[i])
+                tree_brackets.append(tree)
+        else:
+            # use Q Inference Net to get the label.
+            # FIXME: Maybe some problems because 我把QNet的推理单独提进新的函数了
+            scores = self.get_span_scores(parse_x)
+            self.scores = scores
+            scores = scores / is_temp
+            print("Q Inference CRF Net Forwarding")
+            _, log_probs_action_q, tree_brackets, spans = self._forward_Q_CRF(
+                scores, parse_length, batch_size, samples)
+            entropy = self.q_crf.entropy[0][parse_length - 1]
+
+        # prepare for p tg net forward + process q net output
+        attn_masks = []
+        attn_relpos = []
+        inputs = []
+        labels = []
+        actions = []
+        max_len_tmp = 0
+        print("Preparing input for TG Net + Processing Q Net output")
+        for b in range(batch_size * samples):
+            # add NT
+            from utils import get_actions
+            action = get_actions(tree_brackets[b])
+            if has_eos:
+                actions.append(
+                    action + [self.S, self.R]
+                )  # we train the model to generate <s> and then do a final reduce
+            else:
+                actions.append(action)
+
+            if has_eos:
+                sent_str = self.get_tree_str(parse_x[b // samples],
+                                             tree_brackets[b])
+                sent_id = np.array(self.get_tree_id(parse_x[b // samples],
+                                                    tree_brackets[b]),
+                                   dtype=np.int32)
+            else:
+                sent_str = self.get_tree_str(parse_x[b // samples],
+                                             tree_brackets[b])
+                sent_id = np.array(self.get_tree_id(parse_x[b // samples],
+                                                    tree_brackets[b]),
+                                   dtype=np.int32)
+
+            input = np.array([1] + list(sent_id))
+            if len(input) > max_len_tmp:
+                max_len_tmp = len(input)
+
+            if has_eos:
+                label = np.array(list(sent_id) + [2])
+            else:
+                label = np.array(list(sent_id) + [0])
+
+            tmp = {"inputs": input, "labels": label}
+            tmp = masking_utils.compute_token_types(tmp, ranges)
+            # generate chunks
+            chunks = maskrules.chunks_for_sequence(
+                tmp["inputs"],
+                tmp["inputs_ttypes"],
+                tmp["labels"],
+                tmp["labels_ttypes"],
+            )
+            len_inp = len(input)
+
+            len_inp_processed = (len_inp * 4 - 2) // 3
+            input_processed = np.array(chunks[0][0][0:len_inp_processed])
+            inputs.append(input_processed)
+            label_processed = np.array(chunks[0][2][0:len_inp_processed])
+            labels.append(label_processed)
+            attn_mask = np.array(chunks[0][4])
+            l_chunk = len(attn_mask[0])
+            attn_mask = attn_mask[0:len_inp_processed, 0:len_inp_processed]
+            attn_masks.append(attn_mask)
+            attn_relpos.append(np.array(chunks[0][5])[0: len(attn_mask), \
+                               l_chunk: l_chunk + len(attn_mask)])
+
+        attn_masks = np.array(attn_masks)
+        attn_relpos = np.array(attn_relpos)
+
+        actions = torch.Tensor(actions).float().cuda()
+        attn_masks = torch.LongTensor(attn_masks).cuda()  # B * l_inp * l_inp
+        attn_relpos = torch.LongTensor(attn_relpos).cuda()  # B * l_inp * l_inp
+
+        inputs = np.array(inputs)
+        labels = np.array(labels)
+
+        inp = torch.LongTensor(inputs.T).cuda()  # l_inp * B
+        tgt = torch.LongTensor(labels.T).cuda()  # l_tgt(=l_inp) * B
+        tgt_len = tgt.size(0)
+        inp_len = inp.size(0)
+        batch_expand = batch_size * samples
+
+        # p tg net forward
+        loss, log_probs_action_p = self._forward_TG(batch_size=batch_expand,
+                                                    inp_len=inp_len,
+                                                    inp=inp,
+                                                    attn_masks=attn_masks,
+                                                    attn_relpos=attn_relpos,
+                                                    return_prob=True)
+        log_p = -loss
+
+        # return
+        if mode not in ['left', 'right']:
+            log_probs_action_q = log_probs_action_q.contiguous().view(
+                batch_size, samples)
+            return log_p, log_probs_action_p, log_probs_action_q, actions, entropy
+        else:
+            return log_p, log_probs_action_p, None, actions, None
