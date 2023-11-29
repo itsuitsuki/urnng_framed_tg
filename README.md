@@ -80,3 +80,7 @@ python eval_ppl.py --model_file /ckpt/utg_ckpt.pt --test_file data/ptb-test.pkl 
    ```
    
 
+## FAQ
+### 1. ImportError: /lib64/libstdc++.so.6: version `GLIBCXX_3.4.20` not found
+
+The GPU is not allocated / available, or GCC version is obsolete (the version should >= 4.9)
