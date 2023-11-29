@@ -159,7 +159,7 @@ def clean_number(w):
     return new_w
 
 def get_data(args):
-    indexer = Indexer(["<pad>","<unk>","<s>","</s>"])
+    indexer = Indexer(["<pad>","<unk>","<s>","</s>","(",")"])
 
     def make_vocab(textfile, seqlength, minseqlength, lowercase, replace_num,
                    train=1, apply_length_filter=1):
