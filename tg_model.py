@@ -521,17 +521,17 @@ class TransformerGrammar(nn.Module):
         print(prob.shape)
         print(targets.shape)
         loss = crit(prob, targets)
-        prob = prob.contiguous().view(batch_size, -1)
         loss = loss.permute(1, 0).contiguous()
         loss = loss.sum(1)  # given by cross entropy
-        loss = loss.contiguous().view(batch_size, -1)
-        
-
         if return_h:
+            loss = loss.contiguous().view(batch_size, -1)
             return loss, core_out
         elif return_prob:
+            loss = loss.contiguous().view(batch_size, -1)
+            prob = prob.contiguous().view(batch_size, -1)
             return loss, prob
         else:
+            loss = loss.contiguous().view(batch_size, -1)
             return loss
 
 
