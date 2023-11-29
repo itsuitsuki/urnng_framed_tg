@@ -15,13 +15,15 @@ import utils
 import re
 
 class Indexer:
-    def __init__(self, symbols = ["<pad>","<unk>","<s>","</s>"]):
+    def __init__(self, symbols = ["<pad>","<unk>","<s>","</s>","(",")"]):
         self.vocab = defaultdict(int)
         self.PAD = symbols[0]
         self.UNK = symbols[1]
         self.BOS = symbols[2]
         self.EOS = symbols[3]
-        self.d = {self.PAD: 0, self.UNK: 1, self.BOS: 2, self.EOS: 3}
+        self.LEFTARC = symbols[4]
+        self.RIGHTARC = symbols[5]
+        self.d = {self.PAD: 0, self.UNK: 1, self.BOS: 2, self.EOS: 3, self.LEFTARC: 4, self.RIGHTARC: 5}
         self.idx2word = {}
         
     def add_w(self, ws):
