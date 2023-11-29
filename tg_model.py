@@ -737,10 +737,8 @@ class TransformerGrammarPlusQNet(nn.Module):
             parse_length = length
             parse_x = x
 
-        # q inference net forward
-
+        # q inference net forward. left/right(2 test trees)  /Q.
         if mode == 'left':
-            # print(parse_x[0])
             tree_brackets = []
             for i in range(batch_size):
                 tree = self.generate_left_tree(parse_x[i])
