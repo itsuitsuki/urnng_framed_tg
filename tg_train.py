@@ -397,7 +397,7 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
             ll_action_p_all = prob_p # FIXME: Change me into action score
             p_action_shift_score = (1 - prob_p).log()
             p_action_reduce_score = prob_p.log()
-            p_action_score = (1 - actions) * p_action_shift_score + actions * p_action_reduce_score
+            p_action_score = (1 - all_actions) * p_action_shift_score + all_actions * p_action_reduce_score
             p_action_score = (p_action_score * p_attn_mask).sum(1)
             
             ll_word, ll_action_p, ll_action_q = ll_word_all.mean(
