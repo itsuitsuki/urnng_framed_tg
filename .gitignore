@@ -20,6 +20,7 @@
 # *.pkl
 /.dependencies
 /masking/build
+/masking/build/*
 */__pycache__
 /__pycache__
 /.idea
