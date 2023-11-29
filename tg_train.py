@@ -353,7 +353,8 @@ def tg_main(args):
 def tg_eval(data, model, samples=0, count_eos_ppl=0):
     print('-'*50)
     print("TG EVAL")
-    print("Data: ", data)
+    print("Data: ", data[0])
+    print("Data length: ", len(data))
     # sample : mc_sample. for iwae calculation
     model.eval()
     num_sents = 0
