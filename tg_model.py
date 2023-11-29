@@ -712,11 +712,12 @@ class TransformerGrammarPlusQNet(nn.Module):
                     use_mask=True,
                     document_level=False,
                     return_h=False,
+                    return_prob=True,
                     max_relative_length=None,
                     min_relative_length=None):
         
         return self.tg_p_net(input_batch, length, use_mask, document_level,
-                             return_h, max_relative_length,
+                             return_h, return_prob, max_relative_length,
                              min_relative_length)
 
     def forward(
