@@ -167,8 +167,8 @@ def tg_main(args):
         print('loading model from ' + args.ckpt_path)
         checkpoint = torch.load(args.ckpt_path)
         model = checkpoint['model']
-    print("model architecture")
-    print(model)
+    # print("model architecture")
+    # print(model)
 
     # 1. 把模型参数分成2部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）
     # action params 被 TransformerGrammarPlusQNet 代替了
