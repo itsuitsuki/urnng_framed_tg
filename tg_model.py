@@ -518,17 +518,21 @@ class TransformerGrammar(nn.Module):
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
         prob = logits.view(seq_len, batch_size, -1)
         prob = prob.permute(0, 2, 1)
-        print(prob.shape)
-        print(targets.shape)
+        print("prob shape: ", prob.shape)
+        print("targets shape: ", targets.shape)
         loss = crit(prob, targets)
         loss = loss.permute(1, 0).contiguous()
         loss = loss.sum(1)  # given by cross entropy
+        print("loss shape: ", loss.shape)
         if return_h:
             loss = loss.contiguous().view(batch_size, -1)
             return loss, core_out
         elif return_prob:
             loss = loss.contiguous().view(batch_size, -1)
             prob = prob.contiguous().view(batch_size, -1)
+            print("Return Prob = True.")
+            print("prob shape: ", prob.shape)
+            print("loss shape: ", loss.shape)
             return loss, prob
         else:
             loss = loss.contiguous().view(batch_size, -1)
@@ -706,12 +710,6 @@ class TransformerGrammarPlusQNet(nn.Module):
                               samples).contiguous().view(batch_size * samples)
         return self.q_crf._sample(crf_input, self.q_crf.alpha)
 
-#         loss, log_probs_action_p = self._forward_TG(batch_size=batch_expand,
-                                                    # inp_len=inp_len,
-                                                    # inp=inp,
-                                                    # attn_masks=attn_masks,
-                                                    # attn_relpos=attn_relpos,
-                                                    # return_prob=True)
     def _forward_TG(self,
                     input_batch,
                     length,
@@ -870,7 +868,9 @@ class TransformerGrammarPlusQNet(nn.Module):
                                                     max_relative_length=None
                                                     )
         log_p = -loss
-
+        print("TG Net Forwarding Done")
+        print("log_p shape: ", log_p.shape)
+        print("log_probs_action_p shape: ", log_probs_action_p.shape)
         # return
         if mode not in ['left', 'right']:
             log_probs_action_q = log_probs_action_q.contiguous().view(
