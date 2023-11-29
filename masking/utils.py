@@ -40,8 +40,10 @@ class TokenTypeRanges:
     start_token: int
     pad_token: int
     end_token: int
-    opening_non_terminals: Tuple[int, int]
-    closing_non_terminals: Tuple[int, int]
+    # opening_non_terminals: Tuple[int, int]
+    # closing_non_terminals: Tuple[int, int]
+    opening_non_terminals: int
+    closing_non_terminals: int
 
     def token_type_from_token(self, seq, *, use_pytorch=False):
         """Returns an array of token types from an array of token IDs."""
@@ -55,13 +57,16 @@ class TokenTypeRanges:
         start_token_mask = seq == self.start_token
         pad_token_mask = seq == self.pad_token
         end_token_mask = seq == self.end_token
-        opening_nt_mask = (seq >= self.opening_non_terminals[0]) & (
-            seq < self.opening_non_terminals[1]
-        )
-        closing_nt_mask = (seq >= self.closing_non_terminals[0]) & (
-            seq < self.closing_non_terminals[1]
-        ) 
-
+        # opening_nt_mask = (seq >= self.opening_non_terminals[0]) & (
+        #     seq < self.opening_non_terminals[1]
+        # )
+        # closing_nt_mask = (seq >= self.closing_non_terminals[0]) & (
+        #     seq < self.closing_non_terminals[1]
+        # ) 
+        opening_nt_mask = seq == self.opening_non_terminals
+        closing_nt_mask = seq == self.closing_non_terminals
+        
+        
         result = np_.full_like(seq, mc.TERMINAL, dtype=dtype)
         result[start_token_mask] = mc.SOS
         result[pad_token_mask] = mc.PAD
