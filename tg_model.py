@@ -736,9 +736,14 @@ class TransformerGrammarPlusQNet(nn.Module):
     ):
 
         # prepare for masking and original input
+        print('-' * 50)
         print("Preparing for Forwarding")
+        print("x shape: ", x.shape)
         x = x[:, 1:]
+        print("x shape after x=x[:,1:]  : ", x.shape)
         batch_size, length = x.size(0), x.size(1)
+        print("Batch Size: ", batch_size)
+        print("Length: ", length)
         ranges = self.get_ranges(self.bos_id, self.pad_id, self.eos_id, self.left_arc, self.right_arc)
 
         maskrules = masking_utils.get_masking_rules(
