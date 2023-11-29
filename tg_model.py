@@ -393,7 +393,7 @@ class TransformerGrammar(nn.Module):
             self,
             input_batch,
             length,  # 句子的最大长度
-            use_mask=False,
+            use_mask=True,
             document_level=False,
             return_h=False,
             return_prob=False,
@@ -857,7 +857,7 @@ class TransformerGrammarPlusQNet(nn.Module):
         # 上面的 attn_masks 和 attn_relpos 已经在 _forward_TG 中创建与填充，不需要了
         loss, log_probs_action_p = self._forward_TG(input_batch=inputs, 
                                                     length=inp_len, 
-                                                    use_mask=False,
+                                                    use_mask=True,
                                                     document_level=False,
                                                     return_h=False,
                                                     return_prob=True,
