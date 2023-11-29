@@ -36,7 +36,6 @@ from . import cpp_masking as mcpp
 @dataclasses.dataclass(frozen=True)
 class TokenTypeRanges:
     """Mapping between token IDs ranges to token types."""
-
     start_token: int
     pad_token: int
     end_token: int

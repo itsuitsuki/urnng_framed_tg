@@ -393,7 +393,7 @@ class TransformerGrammar(nn.Module):
             self,
             input_batch,
             length,  # 句子的最大长度
-            use_mask=None,
+            use_mask=False,
             document_level=False,
             return_h=False,
             return_prob=False,
@@ -405,7 +405,7 @@ class TransformerGrammar(nn.Module):
         inputs = []
         targets = []
         batch_size = len(input_batch)
-        if use_mask is None:
+        if use_mask == False:
             length_i = max([len(sent) for sent in input_batch])
             for sent in input_batch:
                 src_ = sent[:-1]
@@ -479,7 +479,7 @@ class TransformerGrammar(nn.Module):
 
         word_emb = self.emb(inputs)
 
-        if use_mask == None:
+        if use_mask == False:
             pos_emb = self.pos_emb(
                 torch.arange(seq_len, -1, -1.0, device=word_emb.device))
         else:
@@ -700,14 +700,21 @@ class TransformerGrammarPlusQNet(nn.Module):
                               samples).contiguous().view(batch_size * samples)
         return self.q_crf._sample(crf_input, self.q_crf.alpha)
 
+#         loss, log_probs_action_p = self._forward_TG(batch_size=batch_expand,
+                                                    # inp_len=inp_len,
+                                                    # inp=inp,
+                                                    # attn_masks=attn_masks,
+                                                    # attn_relpos=attn_relpos,
+                                                    # return_prob=True)
     def _forward_TG(self,
                     input_batch,
                     length,
-                    use_mask=None,
+                    use_mask=True,
                     document_level=False,
                     return_h=False,
                     max_relative_length=None,
                     min_relative_length=None):
+        
         return self.tg_p_net(input_batch, length, use_mask, document_level,
                              return_h, max_relative_length,
                              min_relative_length)
@@ -765,8 +772,8 @@ class TransformerGrammarPlusQNet(nn.Module):
             entropy = self.q_crf.entropy[0][parse_length - 1]
 
         # prepare for p tg net forward + process q net output
-        attn_masks = []
-        attn_relpos = []
+        # attn_masks = []
+        # attn_relpos = []
         inputs = []
         labels = []
         actions = []
@@ -821,19 +828,19 @@ class TransformerGrammarPlusQNet(nn.Module):
             inputs.append(input_processed)
             label_processed = np.array(chunks[0][2][0:len_inp_processed])
             labels.append(label_processed)
-            attn_mask = np.array(chunks[0][4])
-            l_chunk = len(attn_mask[0])
-            attn_mask = attn_mask[0:len_inp_processed, 0:len_inp_processed]
-            attn_masks.append(attn_mask)
-            attn_relpos.append(np.array(chunks[0][5])[0: len(attn_mask), \
-                               l_chunk: l_chunk + len(attn_mask)])
+            # attn_mask = np.array(chunks[0][4])
+            # l_chunk = len(attn_mask[0])
+            # attn_mask = attn_mask[0:len_inp_processed, 0:len_inp_processed]
+            # attn_masks.append(attn_mask)
+            # attn_relpos.append(np.array(chunks[0][5])[0: len(attn_mask), \
+                            #    l_chunk: l_chunk + len(attn_mask)])
 
-        attn_masks = np.array(attn_masks)
-        attn_relpos = np.array(attn_relpos)
+        # attn_masks = np.array(attn_masks)
+        # attn_relpos = np.array(attn_relpos)
 
         actions = torch.Tensor(actions).float().cuda()
-        attn_masks = torch.LongTensor(attn_masks).cuda()  # B * l_inp * l_inp
-        attn_relpos = torch.LongTensor(attn_relpos).cuda()  # B * l_inp * l_inp
+        # attn_masks = torch.LongTensor(attn_masks).cuda()  # B * l_inp * l_inp
+        # attn_relpos = torch.LongTensor(attn_relpos).cuda()  # B * l_inp * l_inp
 
         inputs = np.array(inputs)
         labels = np.array(labels)
@@ -845,12 +852,16 @@ class TransformerGrammarPlusQNet(nn.Module):
         batch_expand = batch_size * samples
 
         # p tg net forward
-        loss, log_probs_action_p = self._forward_TG(batch_size=batch_expand,
-                                                    inp_len=inp_len,
-                                                    inp=inp,
-                                                    attn_masks=attn_masks,
-                                                    attn_relpos=attn_relpos,
-                                                    return_prob=True)
+        # 上面的 attn_masks 和 attn_relpos 已经在 _forward_TG 中创建与填充，不需要了
+        loss, log_probs_action_p = self._forward_TG(input_batch=inp, 
+                                                    length=inp_len, 
+                                                    use_mask=False,
+                                                    document_level=False,
+                                                    return_h=False,
+                                                    return_prob=True,
+                                                    min_relative_length=None, 
+                                                    max_relative_length=None
+                                                    )
         log_p = -loss
 
         # return

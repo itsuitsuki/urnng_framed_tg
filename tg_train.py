@@ -170,7 +170,7 @@ def tg_main(args):
     print("model architecture")
     print(model)
 
-    # 1. 把模型参数分成三部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）
+    # 1. 把模型参数分成2部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）
     # action params 被 TransformerGrammarPlusQNet 代替了
     q_params = []
     # action_params = []
