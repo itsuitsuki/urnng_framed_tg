@@ -854,7 +854,7 @@ class TransformerGrammarPlusQNet(nn.Module):
 
         # p tg net forward
         # 上面的 attn_masks 和 attn_relpos 已经在 _forward_TG 中创建与填充，不需要了
-        loss, log_probs_action_p = self._forward_TG(input_batch=inp, 
+        loss, log_probs_action_p = self._forward_TG(input_batch=inputs, 
                                                     length=inp_len, 
                                                     use_mask=False,
                                                     document_level=False,

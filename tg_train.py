@@ -202,7 +202,7 @@ def tg_main(args):
     best_val_ppl = 5e5
     best_val_f1 = 0
     samples = args.samples
-    best_val_ppl, best_val_f1 = eval(val_data,
+    best_val_ppl, best_val_f1 = tg_eval(val_data,
                                      model,
                                      samples=args.mc_samples,
                                      count_eos_ppl=args.count_eos_ppl)
@@ -316,7 +316,7 @@ def tg_main(args):
                 print("GOLD:", get_tree(gold_binary_trees[-1], sent_str))
         print('--------------------------------')
         print('Checking validation performance...')
-        val_ppl, val_f1 = eval(val_data,
+        val_ppl, val_f1 = tg_eval(val_data,
                                model,
                                samples=args.mc_samples,
                                count_eos_ppl=args.count_eos_ppl)
@@ -350,6 +350,103 @@ def tg_main(args):
             break
     print("Finished training!")
 
+def tg_eval(data, model, samples=0, count_eos_ppl=0):
+    model.eval()
+    num_sents = 0
+    num_words = 0
+    total_nll_recon = 0.
+    total_kl = 0.
+    total_nll_iwae = 0.
+    corpus_f1 = [0., 0., 0.]
+    sent_f1 = []
+    with torch.no_grad():
+        for i in list(reversed(range(len(data)))):
+            sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[
+                i]
+            if length == 1:  # length 1 sents are ignored since URNNG needs at least length 2 sents
+                continue
+            if args.count_eos_ppl == 1:
+                tree_length = length
+                length += 1
+            else:
+                sents = sents[:, :-1]
+                tree_length = length
+            sents = sents.cuda()
+            ll_word_all, ll_action_p_all, ll_action_q_all, actions_all, q_entropy = model(
+                sents, samples=samples, has_eos=count_eos_ppl == 1)
+            ll_word, ll_action_p, ll_action_q = ll_word_all.mean(
+                1), ll_action_p_all.mean(1), ll_action_q_all.mean(1)
+            kl = ll_action_q - ll_action_p
+            _, binary_matrix, argmax_spans = model.q_crf._viterbi(model.scores)
+            actions = []
+            for b in range(batch_size):
+                tree = get_tree_from_binary_matrix(binary_matrix[b],
+                                                   tree_length)
+                actions.append(get_actions(tree))
+            actions = torch.Tensor(actions).long()
+            total_nll_recon += -ll_word.sum().item()
+            total_kl += kl.sum().item()
+            num_sents += batch_size
+            num_words += batch_size * length
+            if samples > 0:
+                # PPL estimate based on IWAE
+                sample_ll = torch.zeros(batch_size, samples)
+                for j in range(samples):
+                    ll_word_j, ll_action_p_j, ll_action_q_j = ll_word_all[:,
+                                                                          j], ll_action_p_all[:,
+                                                                                              j], ll_action_q_all[:,
+                                                                                                                  j]
+                    sample_ll[:, j].copy_(ll_word_j + ll_action_p_j -
+                                          ll_action_q_j)
+                ll_iwae = model.logsumexp(sample_ll, 1) - np.log(samples)
+                total_nll_iwae -= ll_iwae.sum().item()
+            for b in range(batch_size):
+                action = list(actions[b].numpy())
+                span_b = get_spans(action)
+                span_b = argmax_spans[b]
+                span_b_set = set(span_b[:-1])
+                gold_b_set = set(gold_spans[b][:-1])
+                tp, fp, fn = get_stats(span_b_set, gold_b_set)
+                corpus_f1[0] += tp
+                corpus_f1[1] += fp
+                corpus_f1[2] += fn
+
+                # sent-level F1 is based on L83-89 from https://github.com/yikangshen/PRPN/test_phrase_grammar.py
+                model_out = span_b_set
+                std_out = gold_b_set
+                overlap = model_out.intersection(std_out)
+                prec = float(len(overlap)) / (len(model_out) + 1e-8)
+                reca = float(len(overlap)) / (len(std_out) + 1e-8)
+                if len(std_out) == 0:
+                    reca = 1.
+                    if len(model_out) == 0:
+                        prec = 1.
+                f1 = 2 * prec * reca / (prec + reca + 1e-8)
+                sent_f1.append(f1)
+    tp, fp, fn = corpus_f1
+    prec = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    corpus_f1 = 2 * prec * recall / (prec +
+                                     recall) * 100 if prec + recall > 0 else 0.
+    sent_f1 = np.mean(np.array(sent_f1)) * 100
+
+    elbo_ppl = np.exp((total_nll_recon + total_kl) / num_words)
+    recon_ppl = np.exp(total_nll_recon / num_words)
+    iwae_ppl = np.exp(total_nll_iwae / num_words)
+    kl = total_kl / num_sents
+    print(
+        'ElboPPL: %.2f, ReconPPL: %.2f, KL: %.4f, IwaePPL: %.2f, CorpusF1: %.2f, SentAvgF1: %.2f'
+        % (elbo_ppl, recon_ppl, kl, iwae_ppl, corpus_f1, sent_f1))
+    # note that corpus F1 printed here is different from what you should get from
+    # evalb since we do not ignore any tags (e.g. punctuation), while evalb ignores it
+    model.train()
+    return iwae_ppl, corpus_f1
+
+
+if __name__ == '__main__':
+    args = parser.parse_args()
+    # urnng_main(args)
+    tg_main(args)
 
 def urnng_main(args):
     np.random.seed(args.seed)
@@ -652,7 +749,3 @@ def eval(data, model, samples=0, count_eos_ppl=0):
     return iwae_ppl, corpus_f1
 
 
-if __name__ == '__main__':
-    args = parser.parse_args()
-    # urnng_main(args)
-    tg_main(args)
