@@ -91,10 +91,10 @@ parser.add_argument('--q_lr',
                     default=0.0001,
                     type=float,
                     help='learning rate for inference network q')
-parser.add_argument('--action_lr',
-                    default=0.1,
-                    type=float,
-                    help='learning rate for action layer')
+# parser.add_argument('--action_lr',
+#                     default=0.1,
+#                     type=float,
+#                     help='learning rate for action layer')
 parser.add_argument(
     '--lr_decay',
     default=0.5,
@@ -166,15 +166,16 @@ def tg_main(args):
     print("model architecture")
     print(model)
 
-    # 1. 把模型参数分成三部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）和action_params（给action layer，但是我们好像没）
+    # 1. 把模型参数分成三部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）
+    # action params 被 TransformerGrammarPlusQNet 代替了
     q_params = []
-    action_params = []
+    # action_params = []
     model_params = []
     for name, param in model.named_parameters():
-        if 'action' in name:
-            print(name)
-            action_params.append(param)
-        elif 'q_' in name:
+        # if 'action' in name:
+            # print(name)
+            # action_params.append(param)
+        if 'q_' in name:
             print(name)
             q_params.append(param)
         else:
@@ -182,7 +183,7 @@ def tg_main(args):
     q_lr = args.q_lr
     optimizer = torch.optim.SGD(model_params, lr=args.lr)
     q_optimizer = torch.optim.Adam(q_params, lr=q_lr)
-    action_optimizer = torch.optim.SGD(action_params, lr=args.action_lr)
+    # action_optimizer = torch.optim.SGD(action_params, lr=args.action_lr)
     model.train()
     model.cuda(device=device)
 
@@ -231,7 +232,7 @@ def tg_main(args):
             b += 1
             q_optimizer.zero_grad()
             optimizer.zero_grad()
-            action_optimizer.zero_grad()
+            # action_optimizer.zero_grad()
             if args.mode == 'unsupervised':
                 ll_word, ll_action_p, ll_action_q, all_actions, q_entropy = model(
                     sents, samples=samples, has_eos=True)
@@ -269,13 +270,14 @@ def tg_main(args):
             train_kl += kl.sum().item()
             (-obj.mean()).backward()
             if args.max_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model_params + action_params,
+                # torch.nn.utils.clip_grad_norm_(model_params + action_params,  # FIXME: OK?
+                torch.nn.utils.clip_grad_norm_(model_params,
                                                args.max_grad_norm)
             if args.q_max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(q_params, args.q_max_grad_norm)
             q_optimizer.step()
             optimizer.step()
-            action_optimizer.step()
+            # action_optimizer.step()
             num_sents += batch_size
             num_words += batch_size * length
             for bb in range(batch_size):
@@ -332,13 +334,13 @@ def tg_main(args):
         if lr_decay == 1:
             args.lr = args.lr_decay * args.lr
             args.q_lr = args.lr_decay * args.q_lr
-            args.action_lr = args.lr_decay * args.action_lr
+            # args.action_lr = args.lr_decay * args.action_lr
             for param_group in optimizer.param_groups:
                 param_group['lr'] = args.lr
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
-            for param_group in action_optimizer.param_groups:
-                param_group['lr'] = args.action_lr
+            # for param_group in action_optimizer.param_groups:
+            #     param_group['lr'] = args.action_lr
         if args.lr < 0.03:
             break
     print("Finished training!")
