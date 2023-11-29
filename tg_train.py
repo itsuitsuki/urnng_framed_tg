@@ -351,6 +351,9 @@ def tg_main(args):
     print("Finished training!")
 
 def tg_eval(data, model, samples=0, count_eos_ppl=0):
+    print('-'*50)
+    print("TG EVAL")
+    print("Data: ", data)
     # sample : mc_sample. for iwae calculation
     model.eval()
     num_sents = 0

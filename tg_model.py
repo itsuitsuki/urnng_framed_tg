@@ -870,6 +870,7 @@ class TransformerGrammarPlusQNet(nn.Module):
                                                     max_relative_length=None
                                                     )
         log_p = -loss
+        print("-" * 50)
         print("TG Net Forwarding Done")
         print("log_p shape: ", log_p.shape)
         print("log_probs_action_p shape: ", log_probs_action_p.shape)
