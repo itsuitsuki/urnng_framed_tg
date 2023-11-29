@@ -374,6 +374,7 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
             sents = sents.cuda()
             ll_word_all, ll_action_p_all, ll_action_q_all, actions_all, q_entropy = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
+            print("-" * 50)
             print("ll_word_all shape:", ll_word_all.shape)
             print("ll_action_p_all shape:", ll_action_p_all.shape)
             print("ll_action_q_all shape:", ll_action_q_all.shape)
@@ -398,6 +399,7 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 sample_ll = torch.zeros(batch_size, samples)
                 for j in range(samples):
                     ll_word_j, ll_action_p_j, ll_action_q_j = ll_word_all[:,j], ll_action_p_all[:,j], ll_action_q_all[:,j]
+                    print("-" * 50)
                     print("ll_word_j shape:", ll_word_j.shape)
                     print("ll_action_p_j shape:", ll_action_p_j.shape)
                     print("ll_action_q_j shape:", ll_action_q_j.shape)

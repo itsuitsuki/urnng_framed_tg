@@ -518,6 +518,7 @@ class TransformerGrammar(nn.Module):
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
         prob = logits.view(seq_len, batch_size, -1)
         prob = prob.permute(0, 2, 1)
+        print("-" * 50)
         print("prob shape: ", prob.shape)
         print("targets shape: ", targets.shape)
         loss = crit(prob, targets)
@@ -530,6 +531,7 @@ class TransformerGrammar(nn.Module):
         elif return_prob:
             loss = loss.contiguous().view(batch_size, -1)
             prob = prob.contiguous().view(batch_size, -1)
+            print("-" * 50)
             print("Return Prob = True.")
             print("prob shape: ", prob.shape)
             print("loss shape: ", loss.shape)
