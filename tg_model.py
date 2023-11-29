@@ -540,7 +540,7 @@ class TransformerGrammar(nn.Module):
             print("prob shape: ", prob.shape)
             print("loss shape: ", loss.shape)
             print("attn mask shape: ", attn_mask.shape)
-            return loss, prob
+            return loss, prob, attn_mask
         else:
             loss = loss.contiguous().view(-1, batch_size)
             return loss
@@ -871,7 +871,7 @@ class TransformerGrammarPlusQNet(nn.Module):
 
         # p tg net forward
         # 上面的 attn_masks 和 attn_relpos 已经在 _forward_TG 中创建与填充，不需要了
-        loss, log_probs_action_p = self._forward_TG(input_batch=inputs, 
+        loss, log_probs_action_p, tg_attn_mask = self._forward_TG(input_batch=inputs, 
                                                     length=inp_len, 
                                                     use_mask=True,
                                                     document_level=False,
@@ -890,6 +890,6 @@ class TransformerGrammarPlusQNet(nn.Module):
         if mode not in ['left', 'right']:
             log_probs_action_q = log_probs_action_q.contiguous().view(
                 batch_size, samples)
-            return log_p, log_probs_action_p, log_probs_action_q, actions, entropy
+            return log_p, log_probs_action_p, log_probs_action_q, actions, entropy, tg_attn_mask
         else:
-            return log_p, log_probs_action_p, None, actions, None
+            return log_p, log_probs_action_p, None, actions, None, tg_attn_mask

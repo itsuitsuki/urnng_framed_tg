@@ -239,7 +239,7 @@ def tg_main(args):
             optimizer.zero_grad()
             # action_optimizer.zero_grad()
             if args.mode == 'unsupervised':
-                ll_word, ll_action_p, ll_action_q, all_actions, q_entropy = model(
+                ll_word, ll_action_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
                     sents, samples=samples, has_eos=True)
                 log_f = ll_word + kl_pen * ll_action_p
                 iwae_ll = log_f.mean(1).detach() + kl_pen * q_entropy.detach()
@@ -385,16 +385,21 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 sents = sents[:, :-1]
                 tree_length = length
             sents = sents.cuda()
-            ll_word_all, prob_p, ll_action_q_all, actions_all, q_entropy = model(
+            ll_word_all, prob_p, ll_action_q_all, all_actions, q_entropy, p_attn_mask = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
             print("-" * 50)
             print("ll_word_all shape:", ll_word_all.shape)
             print("prob_p shape: ", prob_p.shape)
             # print("ll_action_p_all shape:", ll_action_p_all.shape)
             print("ll_action_q_all shape:", ll_action_q_all.shape)
-            print("actions_all shape:", actions_all.shape)
+            print("all_actions shape:", all_actions.shape)
             print("q_entropy shape:", q_entropy.shape)
             ll_action_p_all = prob_p # FIXME: Change me into action score
+            p_action_shift_score = (1 - prob_p).log()
+            p_action_reduce_score = prob_p.log()
+            p_action_score = (1 - actions) * p_action_shift_score + actions * p_action_reduce_score
+            p_action_score = (p_action_score * p_attn_mask).sum(1)
+            
             ll_word, ll_action_p, ll_action_q = ll_word_all.mean(
                 1), ll_action_p_all.mean(1), ll_action_q_all.mean(1)
             kl = ll_action_q - ll_action_p
