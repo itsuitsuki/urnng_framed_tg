@@ -373,6 +373,11 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
             sents = sents.cuda()
             ll_word_all, ll_action_p_all, ll_action_q_all, actions_all, q_entropy = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
+            print("ll_word_all shape:", ll_word_all.shape)
+            print("ll_action_p_all shape:", ll_action_p_all.shape)
+            print("ll_action_q_all shape:", ll_action_q_all.shape)
+            print("actions_all shape:", actions_all.shape)
+            print("q_entropy shape:", q_entropy.shape)
             ll_word, ll_action_p, ll_action_q = ll_word_all.mean(
                 1), ll_action_p_all.mean(1), ll_action_q_all.mean(1)
             kl = ll_action_q - ll_action_p
@@ -392,7 +397,9 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 sample_ll = torch.zeros(batch_size, samples)
                 for j in range(samples):
                     ll_word_j, ll_action_p_j, ll_action_q_j = ll_word_all[:,j], ll_action_p_all[:,j], ll_action_q_all[:,j]
-                    
+                    print("ll_word_j shape:", ll_word_j.shape)
+                    print("ll_action_p_j shape:", ll_action_p_j.shape)
+                    print("ll_action_q_j shape:", ll_action_q_j.shape)
                     sample_ll[:, j].copy_(ll_word_j + ll_action_p_j -
                                           ll_action_q_j)
                 ll_iwae = model.logsumexp(sample_ll, 1) - np.log(samples)
