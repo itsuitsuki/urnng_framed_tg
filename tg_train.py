@@ -180,7 +180,7 @@ def tg_main(args):
             # print(name)
             # action_params.append(param)
         if 'q_' in name:
-            print(name)
+            # print(name)
             q_params.append(param)
         else:
             model_params.append(param)
