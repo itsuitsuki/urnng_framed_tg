@@ -518,9 +518,12 @@ class TransformerGrammar(nn.Module):
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
         prob = logits.view(seq_len, batch_size, -1)
         prob = prob.permute(0, 2, 1)
+        prob = prob.contiguous().view(batch_size, -1)
         loss = crit(prob, targets)
         loss = loss.permute(1, 0).contiguous()
         loss = loss.sum(1)  # given by cross entropy
+        loss = loss.contiguous().view(batch_size, -1)
+        
 
         if return_h:
             return loss, core_out

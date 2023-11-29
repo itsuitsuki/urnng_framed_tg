@@ -361,11 +361,10 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
     sent_f1 = []
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
-            sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[
-                i]
+            sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[i]
             if length == 1:  # length 1 sents are ignored since URNNG needs at least length 2 sents
                 continue
-            if args.count_eos_ppl == 1:
+            if count_eos_ppl == 1:
                 tree_length = length
                 length += 1
             else:
@@ -392,10 +391,8 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 # PPL estimate based on IWAE
                 sample_ll = torch.zeros(batch_size, samples)
                 for j in range(samples):
-                    ll_word_j, ll_action_p_j, ll_action_q_j = ll_word_all[:,
-                                                                          j], ll_action_p_all[:,
-                                                                                              j], ll_action_q_all[:,
-                                                                                                                  j]
+                    ll_word_j, ll_action_p_j, ll_action_q_j = ll_word_all[:,j], ll_action_p_all[:,j], ll_action_q_all[:,j]
+                    
                     sample_ll[:, j].copy_(ll_word_j + ll_action_p_j -
                                           ll_action_q_j)
                 ll_iwae = model.logsumexp(sample_ll, 1) - np.log(samples)
