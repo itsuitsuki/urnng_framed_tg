@@ -423,7 +423,8 @@ class TransformerGrammar(nn.Module):
             attn_mask = attn_mask.unsqueeze(0).expand(batch_size, -1, -1)
             attn_relpos = None
         else:
-            ranges = masking_utils.TokenTypeRanges(self.bos_id, self.pad_id,
+            ranges = masking_utils.TokenTypeRanges(self.bos_id, 
+                                                   self.pad_id,
                                                    self.eos_id,
                                                    self.opening_id,
                                                    self.closing_id)
@@ -595,8 +596,11 @@ class TransformerGrammarPlusQNet(nn.Module):
         self.emb = nn.Embedding(vocab_size, w_dim)
 
     # utils
-    def get_ranges(self, start_token, pad_token, left_arc, right_arc):
-        return masking_utils.TokenTypeRanges(start_token, pad_token, left_arc,
+    def get_ranges(self, start_token, pad_token, end_token, left_arc, right_arc):
+        return masking_utils.TokenTypeRanges(start_token, 
+                                             pad_token, 
+                                             end_token,
+                                             left_arc,
                                              right_arc)
 
     def generate_left_tree(self, idx):
@@ -721,7 +725,7 @@ class TransformerGrammarPlusQNet(nn.Module):
         print("Preparing for Forwarding")
         x = x[:, 1:]
         batch_size, length = x.size(0), x.size(1)
-        ranges = self.get_ranges(1, 0, self.left_arc, self.right_arc)
+        ranges = self.get_ranges(self.bos_id, self.pad_id, self.eos_id, self.left_arc, self.right_arc)
 
         maskrules = masking_utils.get_masking_rules(
             "stack_compose_double_closing_nt",
