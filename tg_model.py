@@ -407,7 +407,7 @@ class TransformerGrammar(nn.Module):
         targets = []
         batch_size = len(input_batch)
         if use_mask == False:
-            print("Use_mask is False.")
+            # print("Use_mask is False.")
             length_i = max([len(sent) for sent in input_batch])
             for sent in input_batch:
                 src_ = sent[:-1]
@@ -522,24 +522,24 @@ class TransformerGrammar(nn.Module):
         prob = torch.sigmoid(prob).clamp(min=1e-8, max=1 - 1e-8)
         prob = prob.permute(0, 2, 1)
         
-        print("-" * 50)
-        print("prob shape: ", prob.shape)
-        print("targets shape: ", targets.shape)
+        # print("-" * 50)
+        # print("prob shape: ", prob.shape)
+        # print("targets shape: ", targets.shape)
         loss = crit(prob, targets)
         loss = loss.permute(1, 0).contiguous()
         loss = loss.sum(1)  # given by cross entropy
-        print("loss shape: ", loss.shape)
+        # print("loss shape: ", loss.shape)
         if return_h:
             loss = loss.contiguous().view(-1, batch_size)
             return loss, core_out
         elif return_prob:
             loss = loss.contiguous().view(-1, batch_size)
             # prob = prob.contiguous().view(batch_size, -1)
-            print("-" * 50)
-            print("Return Prob = True.")
-            print("prob shape: ", prob.shape)
-            print("loss shape: ", loss.shape)
-            print("attn mask shape: ", attn_mask.shape)
+            # print("-" * 50)
+            # print("Return Prob = True.")
+            # print("prob shape: ", prob.shape)
+            # print("loss shape: ", loss.shape)
+            # print("attn mask shape: ", attn_mask.shape)
             return loss, prob, attn_mask
         else:
             loss = loss.contiguous().view(-1, batch_size)
@@ -742,8 +742,8 @@ class TransformerGrammarPlusQNet(nn.Module):
     ):
 
         # prepare for masking and original input
-        print('-' * 50)
-        print("Preparing for Forwarding")
+        # print('-' * 50)
+        # print("Preparing for Forwarding")
         # print("x shape: ", x.shape)
         x = x[:, 1:]
         # print("x shape after x=x[:,1:]  : ", x.shape)
@@ -784,7 +784,7 @@ class TransformerGrammarPlusQNet(nn.Module):
             scores = self.get_span_scores(parse_x)
             self.scores = scores
             scores = scores / is_temp
-            print("Q Inference CRF Net Forwarding")
+            # print("Q Inference CRF Net Forwarding")
             _, log_probs_action_q, tree_brackets, spans = self._forward_Q_CRF(
                 scores, parse_length, batch_size, samples)
             entropy = self.q_crf.entropy[0][parse_length - 1]
@@ -796,7 +796,7 @@ class TransformerGrammarPlusQNet(nn.Module):
         labels = []
         actions = []
         max_len_tmp = 0
-        print("Preparing input for TG Net + Processing Q Net output")
+        # print("Preparing input for TG Net + Processing Q Net output")
         for b in range(batch_size * samples):
             # add NT
             from utils import get_actions
@@ -882,10 +882,10 @@ class TransformerGrammarPlusQNet(nn.Module):
                                                     max_relative_length=None
                                                     )
         log_p = -loss
-        print("-" * 50)
-        print("TG Net Forwarding Done")
-        print("log_p shape: ", log_p.shape)
-        print("log_probs_action_p shape: ", log_probs_action_p.shape)
+        # print("-" * 50)
+        # print("TG Net Forwarding Done")
+        # print("log_p shape: ", log_p.shape)
+        # print("log_probs_action_p shape: ", log_probs_action_p.shape)
         # return
         if mode not in ['left', 'right']:
             log_probs_action_q = log_probs_action_q.contiguous().view(

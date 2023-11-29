@@ -5,6 +5,7 @@ import time
 
 import torch
 from torch import cuda
+from tqdm import tqdm
 
 from data import Dataset
 from models import RNNG
@@ -187,9 +188,7 @@ def tg_main(args):
     q_lr = args.q_lr
     optimizer = torch.optim.SGD(model_params, lr=args.lr)
     q_optimizer = torch.optim.Adam(q_params, lr=q_lr)
-    # action_optimizer = torch.optim.SGD(action_params, lr=args.action_lr)
     model.train()
-    # model.cuda(device=device)
     model.to(torch.device(device))
 
     epoch = 0
@@ -207,15 +206,14 @@ def tg_main(args):
                                 count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = torch.exp(-best_val_ll)
     all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
-    while epoch < args.num_epochs:
+    for epoch in tqdm(range(args.num_epochs)):
         start_time = time.time()
-        epoch += 1
         if epoch > args.train_q_epochs:
             # stop training q after this many epochs
             args.q_lr = 0.
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
-        print('Starting epoch %d' % epoch)
+        # print('Starting epoch %d' % epoch)
         train_q_entropy = 0.
         num_sents = 0.
         num_words = 0.
@@ -233,7 +231,7 @@ def tg_main(args):
             q_optimizer.zero_grad()
             optimizer.zero_grad()
             if args.mode == 'unsupervised':
-                ll_word, ll_action_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
+                ll_word, prob_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
                     sents, samples=samples, has_eos=True)
                 obj = ll_word.mean(1)
                 if epoch < args.train_q_epochs:
@@ -259,7 +257,6 @@ def tg_main(args):
                 torch.nn.utils.clip_grad_norm_(q_params, args.q_max_grad_norm)
             q_optimizer.step()
             optimizer.step()
-            # action_optimizer.step()
             num_sents += batch_size
             num_words += batch_size * length
             for bb in range(batch_size):
