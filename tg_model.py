@@ -576,7 +576,8 @@ class TransformerGrammarPlusQNet(nn.Module):
         self.d_emb = w_dim
         self.word2idx = word2idx
         self.idx2word = idx2word
-
+        self.S = 0  # action idx for shift/generate
+        self.R = 1  # action idx for reduce
         self.tg_p_net = TransformerGrammar(vocab_size=vocab_size,
                                            w_dim=w_dim,
                                            n_head=n_head,

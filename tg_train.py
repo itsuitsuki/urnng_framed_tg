@@ -122,7 +122,7 @@ parser.add_argument('--gpu', default=0, type=int, help='which gpu to use')
 parser.add_argument('--seed', default=3407, type=int, help='random seed')
 parser.add_argument('--print_every',
                     type=int,
-                    default=500,
+                    default=1,
                     help='print stats after this many batches')
 
 
@@ -201,9 +201,9 @@ def tg_main(args):
     best_val_ppl = 5e5
     samples = args.samples
     best_val_ll = tg_eval(val_data,
-                                model,
-                                samples=args.mc_samples,
-                                count_eos_ppl=args.count_eos_ppl)
+                            model,
+                            samples=args.mc_samples,
+                            count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = torch.exp(-best_val_ll)
     all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
     for epoch in tqdm(range(args.num_epochs)):
@@ -322,9 +322,9 @@ def tg_main(args):
     print("Finished training!")
 
 def tg_eval(data, model, samples=0, count_eos_ppl=0):
-    print('-'*50)
-    print("TG EVAL")
-    print("Data length: ", len(data))
+    # print('-'*50)
+    # print("TG EVAL")
+    # print("Data length: ", len(data))
     # sample : mc_sample. for iwae calculation
     model.eval()
     num_sents = 0
