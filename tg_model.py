@@ -406,6 +406,7 @@ class TransformerGrammar(nn.Module):
         targets = []
         batch_size = len(input_batch)
         if use_mask == False:
+            print("Use_mask is False.")
             length_i = max([len(sent) for sent in input_batch])
             for sent in input_batch:
                 src_ = sent[:-1]
@@ -481,7 +482,7 @@ class TransformerGrammar(nn.Module):
 
         if use_mask == False:
             pos_emb = self.pos_emb(
-                torch.arange(seq_len, -1, -1.0, device=word_emb.device))
+                torch.arange(seq_len - 1, -1, -1.0, device=word_emb.device))
         else:
             if max_relative_length is None:
                 max_relative_length = seq_len
@@ -715,7 +716,7 @@ class TransformerGrammarPlusQNet(nn.Module):
                     return_prob=True,
                     max_relative_length=None,
                     min_relative_length=None):
-        
+
         return self.tg_p_net(input_batch, length, use_mask, document_level,
                              return_h, return_prob, max_relative_length,
                              min_relative_length)
