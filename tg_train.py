@@ -141,7 +141,7 @@ def tg_main(args):
             cuda.set_device(args.gpu)
         except Exception as e:
             print(f"We caught an exception, but that doesn't matter: {e}")
-        device = f'{args.gpu}'
+        device = f'cuda:{args.gpu}'
     else:
         device = 'cpu'
     if args.ckpt_path == '':
@@ -185,7 +185,8 @@ def tg_main(args):
     q_optimizer = torch.optim.Adam(q_params, lr=q_lr)
     # action_optimizer = torch.optim.SGD(action_params, lr=args.action_lr)
     model.train()
-    model.cuda(device=device)
+    # model.cuda(device=device)
+    model.to(torch.device(device))
 
     epoch = 0
     lr_decay = 0
