@@ -556,8 +556,8 @@ class TransformerGrammarPlusQNet(nn.Module):
         self.bos_id = bos_id
         self.eos_id = eos_id
         self.d_emb = w_dim
-        self.word2idx = word2idx
-        self.idx2word = idx2word
+        # self.word2idx = word2idx
+        # self.idx2word = idx2word
 
         self.tg_p_net = TransformerGrammar(vocab_size=vocab_size,
                                            w_dim=w_dim,
@@ -574,8 +574,8 @@ class TransformerGrammarPlusQNet(nn.Module):
                                            closing_id=None,
                                            pre_lnorm=False)
 
-        self.left_arc = self.word2idx['(S']
-        self.right_arc = self.word2idx['S)']
+        # self.left_arc = self.word2idx['(S']
+        # self.right_arc = self.word2idx['S)']
         from TreeCRF import ConstituencyTreeCRF
         self.q_crf = ConstituencyTreeCRF()
         self.q_pos_emb = nn.Embedding(pos_max_len,

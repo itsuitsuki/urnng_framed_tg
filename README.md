@@ -52,7 +52,7 @@ To train the U-TG:
 python tg_train.py --train_file data/ptb-train.pkl --val_file data/ptb-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
 
 # for the test
-python tg_train.py --train_file data/ptb_20231103-train.pkl --val_file data/ptb-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
+python tg_train.py --train_file data/ptb_20231103-train.pkl --val_file data/ptb_20231103-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
 ```
 
 ## Evaluation
