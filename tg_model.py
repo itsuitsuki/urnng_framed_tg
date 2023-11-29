@@ -575,8 +575,8 @@ class TransformerGrammarPlusQNet(nn.Module):
                                            closing_id=None,
                                            pre_lnorm=False)
 
-        self.left_arc = self.word2idx['(']
-        self.right_arc = self.word2idx[')']
+        self.left_arc = self.word2idx['(S']
+        self.right_arc = self.word2idx['S)']
         
         from TreeCRF import ConstituencyTreeCRF
         self.q_crf = ConstituencyTreeCRF()
