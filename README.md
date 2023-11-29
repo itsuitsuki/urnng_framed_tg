@@ -24,18 +24,22 @@ git clone -b v2.10.2 https://github.com/pybind/pybind11.git
 
 
 # Sentencepiece Building
-git clone -b v0.1.97 https://github.com/google/sentencepiece.git
-cd sentencepiece
-mkdir build
-cd build
-cmake ..
-make -j # if not available, that will not matter?
+# git clone -b v0.1.97 https://github.com/google/sentencepiece.git
+# cd sentencepiece
+# mkdir build
+# cd build
+# cmake ..
+# make -j # if not available, that will not matter?
 
 # masking cpp building
+# ensure this exists: ./.dependencies
+# .dependencies is the sibling of ./masking from the parent directory .
+
 cd ..
 mkdir build
 cd build
 cmake ..
+make -j
 ```
 
 
