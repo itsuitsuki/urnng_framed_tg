@@ -363,10 +363,11 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
     total_nll_iwae = 0.
     corpus_f1 = [0., 0., 0.]
     sent_f1 = []
+    print_data_bool = True
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[i]
-            if i == 0:
+            if print_data_bool:
                 print("sents: ", sents)
                 print("length: ", length)
                 print("batch_size: ", batch_size)
@@ -374,6 +375,7 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 print("gold_spans: ", gold_spans)
                 print("gold_binary_trees: ", gold_binary_trees)
                 print("other_data: ", other_data)
+                print_data_bool = False
             if length == 1:  # length 1 sents are ignored since URNNG needs at least length 2 sents
                 continue
             if count_eos_ppl == 1:
