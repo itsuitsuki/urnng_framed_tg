@@ -396,7 +396,8 @@ class TransformerGrammar(nn.Module):
             use_mask=True,
             document_level=False,
             return_h=False,
-            return_prob=False,
+            return_prob=True,
+            return_action_score=False,
             max_relative_length=None,
             min_relative_length=None):
 
@@ -517,7 +518,10 @@ class TransformerGrammar(nn.Module):
         logits = self.projection(core_out)
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
         prob = logits.view(seq_len, batch_size, -1)
+        # normalize
+        prob = torch.sigmoid(prob).clamp(min=1e-8, max=1 - 1e-8)
         prob = prob.permute(0, 2, 1)
+        
         print("-" * 50)
         print("prob shape: ", prob.shape)
         print("targets shape: ", targets.shape)
@@ -526,18 +530,19 @@ class TransformerGrammar(nn.Module):
         loss = loss.sum(1)  # given by cross entropy
         print("loss shape: ", loss.shape)
         if return_h:
-            loss = loss.contiguous().view(batch_size, -1)
+            loss = loss.contiguous().view(-1, batch_size)
             return loss, core_out
         elif return_prob:
-            loss = loss.contiguous().view(batch_size, -1)
-            prob = prob.contiguous().view(batch_size, -1)
+            loss = loss.contiguous().view(-1, batch_size)
+            # prob = prob.contiguous().view(batch_size, -1)
             print("-" * 50)
             print("Return Prob = True.")
             print("prob shape: ", prob.shape)
             print("loss shape: ", loss.shape)
+            print("attn mask shape: ", attn_mask.shape)
             return loss, prob
         else:
-            loss = loss.contiguous().view(batch_size, -1)
+            loss = loss.contiguous().view(-1, batch_size)
             return loss
 
 
@@ -719,11 +724,12 @@ class TransformerGrammarPlusQNet(nn.Module):
                     document_level=False,
                     return_h=False,
                     return_prob=True,
+                    return_action_score=False,
                     max_relative_length=None,
                     min_relative_length=None):
 
         return self.tg_p_net(input_batch, length, use_mask, document_level,
-                             return_h, return_prob, max_relative_length,
+                             return_h, return_prob, return_action_score, max_relative_length,
                              min_relative_length)
 
     def forward(
@@ -738,9 +744,9 @@ class TransformerGrammarPlusQNet(nn.Module):
         # prepare for masking and original input
         print('-' * 50)
         print("Preparing for Forwarding")
-        print("x shape: ", x.shape)
+        # print("x shape: ", x.shape)
         x = x[:, 1:]
-        print("x shape after x=x[:,1:]  : ", x.shape)
+        # print("x shape after x=x[:,1:]  : ", x.shape)
         batch_size, length = x.size(0), x.size(1)
         print("Batch Size: ", batch_size)
         print("Length: ", length)
@@ -871,6 +877,7 @@ class TransformerGrammarPlusQNet(nn.Module):
                                                     document_level=False,
                                                     return_h=False,
                                                     return_prob=True,
+                                                    return_action_score=False,
                                                     min_relative_length=None, 
                                                     max_relative_length=None
                                                     )

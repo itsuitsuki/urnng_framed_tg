@@ -363,7 +363,7 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
     total_nll_iwae = 0.
     corpus_f1 = [0., 0., 0.]
     sent_f1 = []
-    print_data_bool = True
+    print_data_bool = False
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[i]
@@ -385,14 +385,16 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 sents = sents[:, :-1]
                 tree_length = length
             sents = sents.cuda()
-            ll_word_all, ll_action_p_all, ll_action_q_all, actions_all, q_entropy = model(
+            ll_word_all, prob_p, ll_action_q_all, actions_all, q_entropy = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
             print("-" * 50)
             print("ll_word_all shape:", ll_word_all.shape)
-            print("ll_action_p_all shape:", ll_action_p_all.shape)
+            print("prob_p shape: ", prob_p.shape)
+            # print("ll_action_p_all shape:", ll_action_p_all.shape)
             print("ll_action_q_all shape:", ll_action_q_all.shape)
             print("actions_all shape:", actions_all.shape)
             print("q_entropy shape:", q_entropy.shape)
+            ll_action_p_all = prob_p # FIXME: Change me into action score
             ll_word, ll_action_p, ll_action_q = ll_word_all.mean(
                 1), ll_action_p_all.mean(1), ll_action_q_all.mean(1)
             kl = ll_action_q - ll_action_p
