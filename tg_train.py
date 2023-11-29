@@ -200,12 +200,12 @@ def tg_main(args):
     else:
         kl_pen = 1.
     best_val_ppl = 5e5
-    best_val_f1 = 0
     samples = args.samples
-    best_val_ppl, best_val_f1 = tg_eval(val_data,
-                                     model,
-                                     samples=args.mc_samples,
-                                     count_eos_ppl=args.count_eos_ppl)
+    best_val_ll = tg_eval(val_data,
+                                model,
+                                samples=args.mc_samples,
+                                count_eos_ppl=args.count_eos_ppl)
+    best_val_ppl = torch.exp(-best_val_ll)
     all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
     while epoch < args.num_epochs:
         start_time = time.time()
@@ -216,15 +216,10 @@ def tg_main(args):
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
         print('Starting epoch %d' % epoch)
-        train_nll_recon = 0.
-        train_nll_iwae = 0.
-        train_kl = 0.
         train_q_entropy = 0.
         num_sents = 0.
         num_words = 0.
         b = 0
-
-        #
         for i in np.random.permutation(len(train_data)):
             if args.kl_warmup > 0:
                 kl_pen = min(1., kl_pen + kl_warmup_batch)
@@ -237,45 +232,27 @@ def tg_main(args):
             b += 1
             q_optimizer.zero_grad()
             optimizer.zero_grad()
-            # action_optimizer.zero_grad()
             if args.mode == 'unsupervised':
                 ll_word, ll_action_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
                     sents, samples=samples, has_eos=True)
-                log_f = ll_word + kl_pen * ll_action_p
-                iwae_ll = log_f.mean(1).detach() + kl_pen * q_entropy.detach()
-                obj = log_f.mean(1)
+                obj = ll_word.mean(1)
                 if epoch < args.train_q_epochs:
                     obj += kl_pen * q_entropy
-                    baseline = torch.zeros_like(log_f)
-                    baseline_k = torch.zeros_like(log_f)
+                    baseline = torch.zeros_like(ll_word)
+                    baseline_k = torch.zeros_like(ll_word)
                     for k in range(samples):
-                        baseline_k.copy_(log_f)
+                        baseline_k.copy_(ll_word)
                         baseline_k[:, k].fill_(0)
                         baseline[:,
                                  k] = baseline_k.detach().sum(1) / (samples -
                                                                     1)
-                    obj += ((log_f.detach() - baseline.detach()) *
+                    obj += ((ll_word.detach() - baseline.detach()) *
                             ll_action_q).mean(1)
-                kl = (ll_action_q - ll_action_p).mean(1).detach()
                 ll_word = ll_word.mean(1)
                 train_q_entropy += q_entropy.sum().item()
-            else:
-                gold_actions = gold_binary_trees
-                ll_action_q = model.forward_tree(sents,
-                                                 gold_actions,
-                                                 has_eos=True)
-                ll_word, ll_action_p, all_actions = model.forward_actions(
-                    sents, gold_actions)
-                obj = ll_word + ll_action_p + ll_action_q
-                kl = -ll_action_q
-                iwae_ll = ll_word + ll_action_p
-            train_nll_iwae += -iwae_ll.sum().item()
             actions = all_actions[:, 0].long().cpu()
-            train_nll_recon += -ll_word.sum().item()
-            train_kl += kl.sum().item()
             (-obj.mean()).backward()
             if args.max_grad_norm > 0:
-                # torch.nn.utils.clip_grad_norm_(model_params + action_params,  # FIXME: OK?
                 torch.nn.utils.clip_grad_norm_(model_params,
                                                args.max_grad_norm)
             if args.q_max_grad_norm > 0:
@@ -292,21 +269,17 @@ def tg_main(args):
                     span_b[:-1])  # ignore the sentence-level trivial span
                 update_stats(span_b_set, [set(gold_spans[bb][:-1])], all_stats)
             if b % args.print_every == 0:
-                all_f1 = get_f1(all_stats)
+                # all_f1 = get_f1(all_stats)
                 param_norm = sum([p.norm()**2
                                   for p in model.parameters()]).item()**0.5
-                log_str = 'Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, qEntropy: %.4f, Train VAE Perplexity: %.2f, ' + \
-                          'Train Reconstrction Perplexity: %.2f, Train KL: %.2f, Train IWAE Perplexity: %.2f, ' + \
-                          '|Param| (Norm of the whole param vector): %.2f, Best Validation Perplexity: %.2f, Best Val F1 Score: %.2f, KL Penalty: %.4f, ' + \
-                          'Gold Tree F1 Score: %.2f, Throughput: %.2f examples/sec'
+                log_str = 'Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, qEntropy: %.4f,' + \
+                          'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
+                          'Throughput: %.2f examples/sec'
                 print(
                     log_str %
                     (epoch, b, len(train_data), args.lr, args.q_lr,
                      train_q_entropy / num_sents,
-                     np.exp((train_nll_recon + train_kl) / num_words),
-                     np.exp(train_nll_recon / num_words), train_kl / num_sents,
-                     np.exp(train_nll_iwae / num_words), param_norm,
-                     best_val_ppl, best_val_f1, kl_pen, all_f1[0], num_sents /
+                     best_val_ppl, best_val_ll, kl_pen, num_sents /
                      (time.time() - start_time)))
                 sent_str = [
                     train_data.idx2word[word_idx]
@@ -316,14 +289,15 @@ def tg_main(args):
                 print("GOLD:", get_tree(gold_binary_trees[-1], sent_str))
         print('--------------------------------')
         print('Checking validation performance...')
-        val_ppl, val_f1 = tg_eval(val_data,
+        val_ll = tg_eval(val_data,
                                model,
                                samples=args.mc_samples,
                                count_eos_ppl=args.count_eos_ppl)
+        val_ppl = torch.exp(-val_ll)
         print('--------------------------------')
         if val_ppl < best_val_ppl:
             best_val_ppl = val_ppl
-            best_val_f1 = val_f1
+            best_val_ll = val_ll
             checkpoint = {
                 'args': args.__dict__,
                 'model': model.cpu(),
@@ -358,24 +332,20 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
     model.eval()
     num_sents = 0
     num_words = 0
-    total_nll_recon = 0.
-    total_kl = 0.
-    total_nll_iwae = 0.
-    corpus_f1 = [0., 0., 0.]
-    sent_f1 = []
-    print_data_bool = False
+    total_log_loss = 0.
+    # print_data_bool = False
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[i]
-            if print_data_bool:
-                print("sents shape: ", sents.shape)
-                print("length: ", length)
-                print("batch_size: ", batch_size)
-                print("gold_actions: ", gold_actions)
-                print("gold_spans: ", gold_spans)
-                print("gold_binary_trees: ", gold_binary_trees)
-                # print("other_data: ", other_data)
-                print_data_bool = False
+            # if print_data_bool:
+            #     print("sents shape: ", sents.shape)
+            #     print("length: ", length)
+            #     print("batch_size: ", batch_size)
+            #     print("gold_actions: ", gold_actions)
+            #     print("gold_spans: ", gold_spans)
+            #     print("gold_binary_trees: ", gold_binary_trees)
+            #     print("other_data: ", other_data)
+            #     print_data_bool = False
             if length == 1:  # length 1 sents are ignored since URNNG needs at least length 2 sents
                 continue
             if count_eos_ppl == 1:
@@ -385,89 +355,18 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 sents = sents[:, :-1]
                 tree_length = length
             sents = sents.cuda()
-            ll_word_all, prob_p, ll_action_q_all, all_actions, q_entropy, p_attn_mask = model(
+            log_likelihood, prob_p, ll_action_q_all, all_actions, q_entropy, p_attn_mask = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
-            print("-" * 50)
-            print("ll_word_all shape:", ll_word_all.shape)
-            print("prob_p shape: ", prob_p.shape)
-            # print("ll_action_p_all shape:", ll_action_p_all.shape)
-            print("ll_action_q_all shape:", ll_action_q_all.shape)
-            print("all_actions shape:", all_actions.shape)
-            print("q_entropy shape:", q_entropy.shape)
-            ll_action_p_all = prob_p # FIXME: Change me into action score
-            p_action_shift_score = (1 - prob_p).log()
-            p_action_reduce_score = prob_p.log()
-            p_action_score = (1 - all_actions) * p_action_shift_score + all_actions * p_action_reduce_score
-            p_action_score = (p_action_score * p_attn_mask).sum(1)
-            
-            ll_word, ll_action_p, ll_action_q = ll_word_all.mean(
-                1), ll_action_p_all.mean(1), ll_action_q_all.mean(1)
-            kl = ll_action_q - ll_action_p
-            _, binary_matrix, argmax_spans = model.q_crf._viterbi(model.scores)
-            actions = []
-            for b in range(batch_size):
-                tree = get_tree_from_binary_matrix(binary_matrix[b],
-                                                   tree_length)
-                actions.append(get_actions(tree))
-            actions = torch.Tensor(actions).long()
-            total_nll_recon += -ll_word.sum().item()
-            total_kl += kl.sum().item()
+            # log likelihood is i.e. ll
             num_sents += batch_size
             num_words += batch_size * length
-            if samples > 0:
-                # PPL estimate based on IWAE
-                sample_ll = torch.zeros(batch_size, samples)
-                for j in range(samples):
-                    ll_word_j, ll_action_p_j, ll_action_q_j = ll_word_all[:,j], ll_action_p_all[:,j], ll_action_q_all[:,j]
-                    print("-" * 50)
-                    print("ll_word_j shape:", ll_word_j.shape)
-                    print("ll_action_p_j shape:", ll_action_p_j.shape)
-                    print("ll_action_q_j shape:", ll_action_q_j.shape)
-                    sample_ll[:, j].copy_(ll_word_j + ll_action_p_j -
-                                          ll_action_q_j)
-                ll_iwae = model.logsumexp(sample_ll, 1) - np.log(samples)
-                total_nll_iwae -= ll_iwae.sum().item()
-            for b in range(batch_size):
-                action = list(actions[b].numpy())
-                span_b = get_spans(action)
-                span_b = argmax_spans[b]
-                span_b_set = set(span_b[:-1])
-                gold_b_set = set(gold_spans[b][:-1])
-                tp, fp, fn = get_stats(span_b_set, gold_b_set)
-                corpus_f1[0] += tp
-                corpus_f1[1] += fp
-                corpus_f1[2] += fn
-
-                # sent-level F1 is based on L83-89 from https://github.com/yikangshen/PRPN/test_phrase_grammar.py
-                model_out = span_b_set
-                std_out = gold_b_set
-                overlap = model_out.intersection(std_out)
-                prec = float(len(overlap)) / (len(model_out) + 1e-8)
-                reca = float(len(overlap)) / (len(std_out) + 1e-8)
-                if len(std_out) == 0:
-                    reca = 1.
-                    if len(model_out) == 0:
-                        prec = 1.
-                f1 = 2 * prec * reca / (prec + reca + 1e-8)
-                sent_f1.append(f1)
-    tp, fp, fn = corpus_f1
-    prec = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    corpus_f1 = 2 * prec * recall / (prec +
-                                     recall) * 100 if prec + recall > 0 else 0.
-    sent_f1 = np.mean(np.array(sent_f1)) * 100
-
-    elbo_ppl = np.exp((total_nll_recon + total_kl) / num_words)
-    recon_ppl = np.exp(total_nll_recon / num_words)
-    iwae_ppl = np.exp(total_nll_iwae / num_words)
-    kl = total_kl / num_sents
-    print(
-        'ElboPPL: %.2f, ReconPPL: %.2f, KL: %.4f, IwaePPL: %.2f, CorpusF1: %.2f, SentAvgF1: %.2f'
-        % (elbo_ppl, recon_ppl, kl, iwae_ppl, corpus_f1, sent_f1))
+            batch_log_ll, ll_action_q = log_likelihood.mean(1), ll_action_q_all.mean(1)
+            total_log_ll += batch_log_ll
+    mean_log_ll = total_log_ll / num_sents
     # note that corpus F1 printed here is different from what you should get from
     # evalb since we do not ignore any tags (e.g. punctuation), while evalb ignores it
     model.train()
-    return iwae_ppl, corpus_f1
+    return mean_log_ll
 
 
 if __name__ == '__main__':
