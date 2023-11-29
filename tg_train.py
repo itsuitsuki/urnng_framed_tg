@@ -332,7 +332,7 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
     model.eval()
     num_sents = 0
     num_words = 0
-    total_log_loss = 0.
+    total_log_ll = 0.
     # print_data_bool = False
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
