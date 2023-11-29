@@ -131,6 +131,8 @@ def tg_main(args):
     torch.manual_seed(args.seed)
     train_data = Dataset(args.train_file)
     val_data = Dataset(args.val_file)
+    idx2word = train_data.idx2word
+    word2idx = train_data.word2idx
     vocab_size = int(train_data.vocab_size)
     print('Train: %d sents / %d batches, Val: %d sents / %d batches' %
           (train_data.sents.size(0), len(train_data), val_data.sents.size(0),
@@ -155,6 +157,8 @@ def tg_main(args):
             dropout=args.dropout,
             num_layers=args.num_layers,
             q_dim=args.q_dim,
+            idx2word=idx2word,
+            word2idx=word2idx,
         )
         if args.param_init > 0:
             for param in model.parameters():
