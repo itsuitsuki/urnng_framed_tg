@@ -788,6 +788,7 @@ class TransformerGrammarPlusQNet(nn.Module):
             # print("Q Inference CRF Net Forwarding")
             _, log_probs_action_q, tree_brackets, spans = self._forward_Q_CRF(
                 scores, parse_length, batch_size, samples)
+            print("Tree Brackets: ", tree_brackets)
             entropy = self.q_crf.entropy[0][parse_length - 1]
             
 
