@@ -223,7 +223,7 @@ def tg_main(args):
                 kl_pen = min(1., kl_pen + kl_warmup_batch)
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[
                 i]
-            print("Sentences: ", sents)
+            # print("Sentences: ", sents)
             if length == 1:
                 # we ignore length 1 sents during training/eval since we work with binary trees only
                 continue
