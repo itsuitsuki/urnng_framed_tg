@@ -263,7 +263,7 @@ def tg_main(args):
             num_sents += batch_size
             num_words += batch_size * length
             for bb in range(batch_size):
-                action = list(actions[bb]).numpy()
+                action = list(all_actions[bb]).numpy()
                 span_b = get_spans(action)
                 span_b_set = set(
                     span_b[:-1])  # ignore the sentence-level trivial span
