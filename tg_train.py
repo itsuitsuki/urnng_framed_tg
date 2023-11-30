@@ -122,7 +122,7 @@ parser.add_argument('--gpu', default=0, type=int, help='which gpu to use')
 parser.add_argument('--seed', default=3407, type=int, help='random seed')
 parser.add_argument('--print_every',
                     type=int,
-                    default=1,
+                    default=500,
                     help='print stats after this many batches')
 
 
@@ -247,9 +247,10 @@ def tg_main(args):
                     #                                                 1)
                     # obj += ((ll_word.detach() - baseline.detach()) *
                     #         ll_action_q).mean(1)
-                ll_word = ll_word.mean(1)
                 train_q_entropy += q_entropy.sum().item()
                 # print("All actions: ", all_actions)
+            else:
+                raise NotImplementedError
             actions = all_actions[:, 0].long().cpu()
             # print("Actions: ", actions)
             (-obj.mean()).backward()
@@ -272,21 +273,21 @@ def tg_main(args):
                 # all_f1 = get_f1(all_stats)
                 param_norm = sum([p.norm()**2
                                   for p in model.parameters()]).item()**0.5
-                log_str = 'Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training qEntropy: %.4f,' + \
+                log_str = 'Train Info: Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training qEntropy: %.4f, ' + \
+                          'Train PPL: %.2f, Train Log Likelihood: %.2f' + \
                           'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
                           'Throughput: %.2f examples/sec'
                 print(
                     log_str %
-                    (epoch, b, len(train_data), args.lr, args.q_lr,
-                     train_q_entropy / num_sents,
-                     best_val_ppl, best_val_ll, kl_pen, num_sents /
-                     (time.time() - start_time)))
+                    (epoch, b, len(train_data), args.lr, args.q_lr, train_q_entropy / num_sents,
+                     torch.exp(-obj.mean()), obj.mean(),
+                     best_val_ppl, best_val_ll, kl_pen, num_sents / (time.time() - start_time)))
                 sent_str = [
                     train_data.idx2word[word_idx]
                     for word_idx in list(sents[-1][1:-1].cpu().numpy())
                 ]
-                print("PRED:", get_tree(action[:-2], sent_str))
-                print("GOLD:", get_tree(gold_binary_trees[-1], sent_str))
+                print(f"PRED in {b}-th batch: ", get_tree(action[:-2], sent_str))
+                print(f"GOLD in {b}-th batch: ", get_tree(gold_binary_trees[-1], sent_str))
         print('--------------------------------')
         print('Checking validation performance...')
         val_ll = tg_eval(val_data,
