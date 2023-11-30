@@ -236,16 +236,16 @@ def tg_main(args):
                 obj = ll_word.mean(1)
                 if epoch < args.train_q_epochs:
                     obj += kl_pen * q_entropy.mean()
-                    baseline = torch.zeros_like(ll_word)
-                    baseline_k = torch.zeros_like(ll_word)
-                    for k in range(samples):
-                        baseline_k.copy_(ll_word)
-                        baseline_k[:, k].fill_(0)
-                        baseline[:,
-                                 k] = baseline_k.detach().sum(1) / (samples -
-                                                                    1)
-                    obj += ((ll_word.detach() - baseline.detach()) *
-                            ll_action_q).mean(1)
+                    # baseline = torch.zeros_like(ll_word)
+                    # baseline_k = torch.zeros_like(ll_word)
+                    # for k in range(samples):
+                    #     baseline_k.copy_(ll_word)
+                    #     baseline_k[:, k].fill_(0)
+                    #     baseline[:,
+                    #              k] = baseline_k.detach().sum(1) / (samples -
+                    #                                                 1)
+                    # obj += ((ll_word.detach() - baseline.detach()) *
+                    #         ll_action_q).mean(1)
                 ll_word = ll_word.mean(1)
                 train_q_entropy += q_entropy.sum().item()
             actions = all_actions[:, 0].long().cpu()
