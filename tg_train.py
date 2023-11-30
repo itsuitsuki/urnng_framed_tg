@@ -249,6 +249,7 @@ def tg_main(args):
                     #         ll_action_q).mean(1)
                 ll_word = ll_word.mean(1)
                 train_q_entropy += q_entropy.sum().item()
+                print("All actions: ", all_actions)
             actions = all_actions[:, 0].long().cpu()
             print("Actions: ", actions)
             (-obj.mean()).backward()
