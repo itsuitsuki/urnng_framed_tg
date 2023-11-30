@@ -399,7 +399,9 @@ class TransformerGrammar(nn.Module):
             return_prob=True,
             return_action_score=False,
             max_relative_length=None,
-            min_relative_length=None):
+            min_relative_length=None,
+            max_seq_len=256,
+            max_mem_len=256):
 
         attn_mask = []
         attn_relpos = []
@@ -432,8 +434,8 @@ class TransformerGrammar(nn.Module):
                                                    self.closing_id)
             maskrules = masking_utils.get_masking_rules(
                 "stack_compose_double_closing_nt",
-                sequence_length=512,
-                memory_length=512,
+                sequence_length=max_seq_len,
+                memory_length=max_mem_len,
                 transparency_prob=0.0,
                 gather_into_new_memory=True,
                 transparency_depth_threshold=-1)
@@ -727,11 +729,13 @@ class TransformerGrammarPlusQNet(nn.Module):
                     return_prob=True,
                     return_action_score=False,
                     max_relative_length=None,
-                    min_relative_length=None):
+                    min_relative_length=None,
+                    max_seq_len=256,
+                    max_mem_len=256):
 
         return self.tg_p_net(input_batch, length, use_mask, document_level,
                              return_h, return_prob, return_action_score, max_relative_length,
-                             min_relative_length)
+                             min_relative_length, max_seq_len=256, max_mem_len=256)
 
     def forward(
         self,
@@ -740,6 +744,8 @@ class TransformerGrammarPlusQNet(nn.Module):
         is_temp=1.,
         has_eos=True,
         mode='default',
+        max_seq_len=256,
+        mem_len=256,
     ):
 
         # prepare for masking and original input
@@ -755,8 +761,8 @@ class TransformerGrammarPlusQNet(nn.Module):
 
         maskrules = masking_utils.get_masking_rules(
             "stack_compose_double_closing_nt",
-            sequence_length=768,
-            memory_length=768,
+            sequence_length=max_seq_len,
+            memory_length=mem_len,
             transparency_prob=0.0,
             gather_into_new_memory=False,
             transparency_depth_threshold=-1)
@@ -884,8 +890,9 @@ class TransformerGrammarPlusQNet(nn.Module):
                                                     return_prob=True,
                                                     return_action_score=False,
                                                     min_relative_length=None, 
-                                                    max_relative_length=None
-                                                    )
+                                                    max_relative_length=None,
+                                                    max_seq_len=max_seq_len,
+                                                    max_mem_len=mem_len)
         log_p = -loss
         # print("-" * 50)
         # print("TG Net Forwarding Done")
