@@ -249,9 +249,9 @@ def tg_main(args):
                     #         ll_action_q).mean(1)
                 ll_word = ll_word.mean(1)
                 train_q_entropy += q_entropy.sum().item()
-                print("All actions: ", all_actions)
+                # print("All actions: ", all_actions)
             actions = all_actions[:, 0].long().cpu()
-            print("Actions: ", actions)
+            # print("Actions: ", actions)
             (-obj.mean()).backward()
             if args.max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model_params,
@@ -294,6 +294,8 @@ def tg_main(args):
                                samples=args.mc_samples,
                                count_eos_ppl=args.count_eos_ppl)
         val_ppl = torch.exp(-val_ll)
+        print("Val PPL: ", val_ppl)
+        print("Val Log Likelihood: ", val_ll)
         print('--------------------------------')
         if val_ppl < best_val_ppl:
             best_val_ppl = val_ppl
