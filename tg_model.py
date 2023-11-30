@@ -799,7 +799,7 @@ class TransformerGrammarPlusQNet(nn.Module):
         labels = []
         actions = []
         max_len_tmp = 0
-        print("Tree brackets: ", tree_brackets)
+        # print("Tree brackets: ", tree_brackets)
         # print("Preparing input for TG Net + Processing Q Net output")
         for b in range(batch_size * samples):
             # add NT
@@ -861,7 +861,7 @@ class TransformerGrammarPlusQNet(nn.Module):
         # attn_relpos = np.array(attn_relpos)
 
         actions = torch.Tensor(actions).float().cuda()
-        print("Actions in model before return: ", actions)
+        # print("Actions in model before return: ", actions)
         # attn_masks = torch.LongTensor(attn_masks).cuda()  # B * l_inp * l_inp
         # attn_relpos = torch.LongTensor(attn_relpos).cuda()  # B * l_inp * l_inp
 
