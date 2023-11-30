@@ -235,6 +235,8 @@ def tg_main(args):
                     sents, samples=samples, has_eos=True)
                 obj = ll_word.mean(1)
                 if epoch < args.train_q_epochs:
+                    print("OBJECTIVE: ", obj)
+                    print("Q ENTROPY: ", q_entropy)
                     obj += kl_pen * q_entropy
                     baseline = torch.zeros_like(ll_word)
                     baseline_k = torch.zeros_like(ll_word)
