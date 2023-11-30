@@ -235,9 +235,7 @@ def tg_main(args):
                     sents, samples=samples, has_eos=True)
                 obj = ll_word.mean(1)
                 if epoch < args.train_q_epochs:
-                    print("OBJECTIVE: ", obj)
-                    print("Q ENTROPY: ", q_entropy)
-                    obj += kl_pen * q_entropy
+                    obj += kl_pen * q_entropy.mean()
                     baseline = torch.zeros_like(ll_word)
                     baseline_k = torch.zeros_like(ll_word)
                     for k in range(samples):
@@ -271,7 +269,7 @@ def tg_main(args):
                 # all_f1 = get_f1(all_stats)
                 param_norm = sum([p.norm()**2
                                   for p in model.parameters()]).item()**0.5
-                log_str = 'Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, qEntropy: %.4f,' + \
+                log_str = 'Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training qEntropy: %.4f,' + \
                           'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
                           'Throughput: %.2f examples/sec'
                 print(
