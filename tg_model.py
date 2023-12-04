@@ -400,8 +400,8 @@ class TransformerGrammar(nn.Module):
             return_action_score=False,
             max_relative_length=None,
             min_relative_length=None,
-            max_seq_len=256,
-            max_mem_len=256):
+            max_seq_len=512,
+            max_mem_len=512):
 
         attn_mask = []
         attn_relpos = []
@@ -730,12 +730,12 @@ class TransformerGrammarPlusQNet(nn.Module):
                     return_action_score=False,
                     max_relative_length=None,
                     min_relative_length=None,
-                    max_seq_len=256,
-                    max_mem_len=256):
+                    max_seq_len=512,
+                    max_mem_len=512):
 
         return self.tg_p_net(input_batch, length, use_mask, document_level,
                              return_h, return_prob, return_action_score, max_relative_length,
-                             min_relative_length, max_seq_len=256, max_mem_len=256)
+                             min_relative_length, max_seq_len=512, max_mem_len=512)
 
     def forward(
         self,
@@ -744,8 +744,8 @@ class TransformerGrammarPlusQNet(nn.Module):
         is_temp=1.,
         has_eos=True,
         mode='default',
-        max_seq_len=256,
-        mem_len=256,
+        max_seq_len=768,
+        mem_len=768,
     ):
 
         # prepare for masking and original input
