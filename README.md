@@ -3,7 +3,7 @@ This repo combines Transformer Grammar with URNNG structure (that VAE structure)
 ## Data Processing
 
 ```powershell
-python preprocess.py --trainfile data/train_02-21.LDC99T42 --valfile data/dev_24.LDC99T42 --testfile data/test_23.LDC99T42 --outputfile data/ptb --vocabminfreq 1 --lowercase 0 --replace_num 0 --batchsize 16
+python preprocess.py --trainfile data/train_02-21.LDC99T42 --valfile data/dev_24.LDC99T42 --testfile data/test_23.LDC99T42 --outputfile data/ptb_20231129 --vocabminfreq 1 --lowercase 0 --replace_num 0 --batchsize 16
 ```
 
 Running this will save the following files in the `data/` folder: `ptb-train.pkl`, `ptb-val.pkl`, `ptb-test.pkl`, `ptb.dict`. Here `ptb.dict` is the word-idx mapping, and you can change the output folder/name by changing the argument to `outputfile`. Also, the preprocessing here will replace singletons with a single `<unk>` rather than with Berkeley parser's mapping rules (see below for results using this setup).
@@ -53,6 +53,7 @@ python tg_train.py --train_file data/ptb-train.pkl --val_file data/ptb-val.pkl -
 
 # for the test
 python tg_train.py --train_file data/ptb_20231103-train.pkl --val_file data/ptb_20231103-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
+python tg_train.py --train_file data/ptb_20231129-train.pkl --val_file data/ptb_20231129-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
 ```
 
 ## Evaluation
