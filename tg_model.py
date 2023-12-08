@@ -469,7 +469,7 @@ class TransformerGrammar(nn.Module):
                                                chunk_len:chunk_len + len(mask)]
                     attn_relpos.append(np.array(relpos))
                 else:
-                    pass  # TODO: Document level. Remain to be implemented.
+                    raise NotImplementedError  # TODO: Document level. Remain to be implemented.
             inputs = torch.LongTensor(np.array(inputs)).cuda()
             targets = torch.LongTensor(np.array(targets)).cuda()
             attn_mask = torch.LongTensor(np.array(attn_mask)).cuda().bool()

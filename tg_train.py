@@ -76,12 +76,12 @@ parser.add_argument('--mode',
                     default='unsupervised',
                     type=str,
                     choices=['unsupervised', 'supervised'])
-parser.add_argument('--mc_samples',
-                    default=5,
+parser.add_argument('--eval_samples',
+                    default=3,
                     type=int,
-                    help='how many samples for IWAE bound calc for evaluation')
+                    help='how many samples for evaluation')
 parser.add_argument('--samples',
-                    default=8,
+                    default=5,
                     type=int,
                     help='how many samples for score function gradients')
 parser.add_argument('--lr',
@@ -89,33 +89,28 @@ parser.add_argument('--lr',
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
-                    default=0.0001,
+                    default=0.001,
                     type=float,
                     help='learning rate for inference network q')
-# parser.add_argument('--action_lr',
-#                     default=0.1,
-#                     type=float,
-#                     help='learning rate for action layer')
-parser.add_argument(
-    '--lr_decay',
-    default=0.5,
-    type=float,
-    help='After warmup_epochs, we have lr decayed by this param.')
+parser.add_argument('--lr_decay',
+                    default=0.5,
+                    type=float,
+                    help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_warmup',
                     default=2,
                     type=int,
                     help='KL-Annealing Decay.')
-parser.add_argument('--train_q_epochs', default=2, type=int, help='')
+parser.add_argument('--train_q_epochs', default=18, type=int, help='')
 parser.add_argument('--param_init',
-                    default=0.1,
+                    default=0.3,
                     type=float,
                     help='parameter initialization (over uniform)')
 parser.add_argument('--max_grad_norm',
-                    default=5,
+                    default=25,
                     type=float,
                     help='gradient clipping parameter')
 parser.add_argument('--q_max_grad_norm',
-                    default=1,
+                    default=10,
                     type=float,
                     help='gradient clipping parameter for q')
 parser.add_argument('--gpu', default=0, type=int, help='which gpu to use')
@@ -125,7 +120,7 @@ parser.add_argument('--print_every',
                     default=500,
                     help='print stats after this many batches')
 
-
+# TODO: Add wandb support.
 def tg_main(args):
     # 0. Preprocessing
     np.random.seed(args.seed)
@@ -161,6 +156,10 @@ def tg_main(args):
             idx2word=idx2word,
             word2idx=word2idx,
         )
+        # 随机初始化模型参数
+        # 初始化范围为 [-args.param_init, args.param_init]
+        # random initialization of model parameters
+        # range: [-args.param_init, args.param_init]
         if args.param_init > 0:
             for param in model.parameters():
                 param.data.uniform_(-args.param_init, args.param_init)
@@ -168,8 +167,6 @@ def tg_main(args):
         print('loading model from ' + args.ckpt_path)
         checkpoint = torch.load(args.ckpt_path)
         model = checkpoint['model']
-    # print("model architecture")
-    # print(model)
 
     # 1. 把模型参数分成2部分，分别是：model_params（给主模型）, q_params（给adversarial inference net）
     # action params 被 TransformerGrammarPlusQNet 代替了
@@ -177,22 +174,17 @@ def tg_main(args):
     # action_params = []
     model_params = []
     for name, param in model.named_parameters():
-        # if 'action' in name:
-            # print(name)
-            # action_params.append(param)
         if 'q_' in name:
-            # print(name)
             q_params.append(param)
         else:
             model_params.append(param)
-    q_lr = args.q_lr
     optimizer = torch.optim.SGD(model_params, lr=args.lr)
-    q_optimizer = torch.optim.Adam(q_params, lr=q_lr)
+    q_optimizer = torch.optim.Adam(q_params, lr=args.q_lr)
     model.train()
     model.to(torch.device(device))
 
     epoch = 0
-    lr_decay = 0
+    lr_decay = False
     if args.kl_warmup > 0:
         kl_pen = 0.
         kl_warmup_batch = 1. / (args.kl_warmup * len(train_data))
@@ -202,10 +194,12 @@ def tg_main(args):
     samples = args.samples
     best_val_ll = tg_eval(val_data,
                             model,
-                            samples=args.mc_samples,
+                            samples=args.eval_samples,
                             count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = torch.exp(-best_val_ll)
     all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
+    
+    # 2. 开始训练, 一共训练 args.num_epochs 轮
     for epoch in tqdm(range(args.num_epochs)):
         start_time = time.time()
         if epoch > args.train_q_epochs:
@@ -221,8 +215,7 @@ def tg_main(args):
         for i in np.random.permutation(len(train_data)):
             if args.kl_warmup > 0:
                 kl_pen = min(1., kl_pen + kl_warmup_batch)
-            sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[
-                i]
+            sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[i]
             # print("Sentences: ", sents)
             if length == 1:
                 # we ignore length 1 sents during training/eval since we work with binary trees only
@@ -235,23 +228,13 @@ def tg_main(args):
                 ll_word, prob_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
                     sents, samples=samples, has_eos=True)
                 obj = ll_word.mean(1)
-                if epoch < args.train_q_epochs:
+                if epoch <= args.train_q_epochs:
                     obj += kl_pen * q_entropy.mean()
-                    # baseline = torch.zeros_like(ll_word)
-                    # baseline_k = torch.zeros_like(ll_word)
-                    # for k in range(samples):
-                    #     baseline_k.copy_(ll_word)
-                    #     baseline_k[:, k].fill_(0)
-                    #     baseline[:,
-                    #              k] = baseline_k.detach().sum(1) / (samples -
-                    #                                                 1)
-                    # obj += ((ll_word.detach() - baseline.detach()) *
-                    #         ll_action_q).mean(1)
                 train_q_entropy += q_entropy.sum().item()
                 # print("All actions: ", all_actions)
             else:
-                raise NotImplementedError
-            actions = all_actions[:, 0].long().cpu()
+                raise NotImplementedError # NOTE: WE DON'T NEED THIS
+            # actions = all_actions[:, 0].long().cpu()
             # print("Actions: ", actions)
             (-obj.mean()).backward()
             if args.max_grad_norm > 0:
@@ -291,9 +274,9 @@ def tg_main(args):
         print('--------------------------------')
         print('Checking validation performance...')
         val_ll = tg_eval(val_data,
-                               model,
-                               samples=args.mc_samples,
-                               count_eos_ppl=args.count_eos_ppl)
+                        model,
+                        samples=args.eval_samples,
+                        count_eos_ppl=args.count_eos_ppl)
         val_ppl = torch.exp(-val_ll)
         print("Val PPL: ", val_ppl)
         print("Val Log Likelihood: ", val_ll)
@@ -312,19 +295,19 @@ def tg_main(args):
             model.cuda(device=device)
         else:  # ppl is not decreasing
             if epoch > args.warmup_epochs:
-                lr_decay = 1
-        if lr_decay == 1:
+                lr_decay = True
+        if lr_decay == True:
             args.lr = args.lr_decay * args.lr
             args.q_lr = args.lr_decay * args.q_lr
-            # args.action_lr = args.lr_decay * args.action_lr
             for param_group in optimizer.param_groups:
                 param_group['lr'] = args.lr
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
-            # for param_group in action_optimizer.param_groups:
-            #     param_group['lr'] = args.action_lr
-        if args.lr < 0.03:
-            break
+            print('Learning rate decreased to %.4f' % args.lr)
+            
+        # why do we need this?
+        # if args.lr < 0.03:
+        #     break
     print("Finished training!")
 
 def tg_eval(data, model, samples=0, count_eos_ppl=0):
@@ -340,15 +323,6 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = data[i]
-            # if print_data_bool:
-            #     print("sents shape: ", sents.shape)
-            #     print("length: ", length)
-            #     print("batch_size: ", batch_size)
-            #     print("gold_actions: ", gold_actions)
-            #     print("gold_spans: ", gold_spans)
-            #     print("gold_binary_trees: ", gold_binary_trees)
-            #     print("other_data: ", other_data)
-            #     print_data_bool = False
             if length == 1:  # length 1 sents are ignored since URNNG needs at least length 2 sents
                 continue
             if count_eos_ppl == 1:
@@ -374,5 +348,4 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    # urnng_main(args)
     tg_main(args)
