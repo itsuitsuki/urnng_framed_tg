@@ -11,6 +11,7 @@ from data import Dataset
 from models import RNNG
 from utils import *
 from tg_model import TransformerGrammar, TransformerGrammarPlusQNet
+import wandb
 
 parser = argparse.ArgumentParser()
 
@@ -69,7 +70,7 @@ parser.add_argument('--num_epochs',
                     help='number of training epochs')
 parser.add_argument(
     '--warmup_epochs',
-    default=8,
+    default=3,
     type=int,
     help='do not decay learning rate for at least this many epochs')
 parser.add_argument('--mode',
@@ -81,11 +82,11 @@ parser.add_argument('--eval_samples',
                     type=int,
                     help='how many samples for evaluation')
 parser.add_argument('--samples',
-                    default=5,
+                    default=10,
                     type=int,
                     help='how many samples for score function gradients')
 parser.add_argument('--lr',
-                    default=1,
+                    default=0.5,
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
@@ -119,7 +120,10 @@ parser.add_argument('--print_every',
                     type=int,
                     default=500,
                     help='print stats after this many batches')
-
+parser.add_argument('--wandb', action='store_true', help='use wandb')
+parser.add_argument('--wandb_entity', default='anonymous', type=str, help='wandb entity')
+parser.add_argument('--run_name', default='tg114514', type=str, help='wandb run name')
+parser.add_argument('--wandb_key', default='', type=str, help='wandb key')
 # TODO: Add wandb support.
 def tg_main(args):
     # 0. Preprocessing
@@ -182,7 +186,8 @@ def tg_main(args):
     q_optimizer = torch.optim.Adam(q_params, lr=args.q_lr)
     model.train()
     model.to(torch.device(device))
-
+    if args.wandb:
+        wandb.watch(model)
     epoch = 0
     lr_decay = False
     if args.kl_warmup > 0:
@@ -225,17 +230,15 @@ def tg_main(args):
             q_optimizer.zero_grad()
             optimizer.zero_grad()
             if args.mode == 'unsupervised':
-                ll_word, prob_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
+                likelihood_p, prob_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
                     sents, samples=samples, has_eos=True)
-                obj = ll_word.mean(1)
+                obj = likelihood_p.mean(1)
                 if epoch <= args.train_q_epochs:
                     obj += kl_pen * q_entropy.mean()
                 train_q_entropy += q_entropy.sum().item()
                 # print("All actions: ", all_actions)
             else:
                 raise NotImplementedError # NOTE: WE DON'T NEED THIS
-            # actions = all_actions[:, 0].long().cpu()
-            # print("Actions: ", actions)
             (-obj.mean()).backward()
             if args.max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model_params,
@@ -253,9 +256,6 @@ def tg_main(args):
                     span_b[:-1])  # ignore the sentence-level trivial span
                 update_stats(span_b_set, [set(gold_spans[bb][:-1])], all_stats)
             if b % args.print_every == 0:
-                # all_f1 = get_f1(all_stats)
-                param_norm = sum([p.norm()**2
-                                  for p in model.parameters()]).item()**0.5
                 log_str = 'Train Info: Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training qEntropy: %.4f, ' + \
                           'Train PPL: %.2f, Train Log Likelihood: %.2f' + \
                           'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
@@ -271,6 +271,13 @@ def tg_main(args):
                 ]
                 print(f"PRED in {b}-th batch: ", get_tree(action[:-2], sent_str))
                 print(f"GOLD in {b}-th batch: ", get_tree(gold_binary_trees[-1], sent_str))
+            if args.wandb:
+                wandb.log({'epoch': epoch})
+                wandb.log({'lr': args.lr})
+                wandb.log({'q_lr': args.q_lr})
+                wandb.log({'Average train_q_entropy': train_q_entropy / num_sents})
+                wandb.log({'Train Perplexity': torch.exp(-obj.mean())})
+                wandb.log({'Train Log Likelihood': obj.mean()})
         print('--------------------------------')
         print('Checking validation performance...')
         val_ll = tg_eval(val_data,
@@ -280,6 +287,11 @@ def tg_main(args):
         val_ppl = torch.exp(-val_ll)
         print("Val PPL: ", val_ppl)
         print("Val Log Likelihood: ", val_ll)
+        if args.wandb:
+            wandb.log({'Validation Perplexity': val_ppl})
+            wandb.log({'Validation Log Likelihood': val_ll})
+            wandb.log({'Best Validation Perplexity': best_val_ppl})
+            wandb.log({'Best Log Likelihood': best_val_ll})
         print('--------------------------------')
         if val_ppl < best_val_ppl:
             best_val_ppl = val_ppl
@@ -304,11 +316,8 @@ def tg_main(args):
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
             print('Learning rate decreased to %.4f' % args.lr)
-            
-        # why do we need this?
-        # if args.lr < 0.03:
-        #     break
-    print("Finished training!")
+
+    print("Training Finished!")
 
 def tg_eval(data, model, samples=0, count_eos_ppl=0):
     # print('-'*50)
@@ -348,4 +357,15 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    if args.wandb == False:
+        import os
+        os.environ['WANDB_MODE'] = 'dryrun'
+        os.environ['WANDB_SILENT'] = 'true'
+        os.environ['WANDB_DISABLED'] = 'true'
+        os.environ['WANDB_WATCH'] = 'false'
+        os.environ['WANDB_CONSOLE'] = 'off'
+    else:
+        wandb.login(key=args.wandb_key)
+        wandb.init(project='transformer_grammar_unsupervised', entity=args.wandb_entity, config=args, name=args.run_name, force=True)
+        wandb.config.update(args)
     tg_main(args)
