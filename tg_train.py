@@ -90,11 +90,11 @@ parser.add_argument('--lr',
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
-                    default=0.001,
+                    default=0.5,
                     type=float,
                     help='learning rate for inference network q')
 parser.add_argument('--lr_decay',
-                    default=0.5,
+                    default=1,
                     type=float,
                     help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_warmup',
