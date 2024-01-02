@@ -70,7 +70,7 @@ parser.add_argument('--num_epochs',
                     help='number of training epochs')
 parser.add_argument(
     '--warmup_epochs',
-    default=3,
+    default=8,
     type=int,
     help='do not decay learning rate for at least this many epochs')
 parser.add_argument('--mode',
@@ -86,32 +86,32 @@ parser.add_argument('--samples',
                     type=int,
                     help='how many samples for score function gradients')
 parser.add_argument('--lr',
-                    default=0.5,
+                    default=1,
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
-                    default=0.01,
+                    default=0.0001,
                     type=float,
                     help='learning rate for inference network q')
 parser.add_argument('--lr_decay',
-                    default=1,
+                    default=0.5,
                     type=float,
                     help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_warmup',
                     default=2,
                     type=int,
                     help='KL-Annealing Decay.')
-parser.add_argument('--train_q_epochs', default=18, type=int, help='')
+parser.add_argument('--train_q_epochs', default=2, type=int, help='')
 parser.add_argument('--param_init',
-                    default=0.3,
+                    default=0.1,
                     type=float,
                     help='parameter initialization (over uniform)')
 parser.add_argument('--max_grad_norm',
-                    default=25,
+                    default=5,
                     type=float,
                     help='gradient clipping parameter')
 parser.add_argument('--q_max_grad_norm',
-                    default=10,
+                    default=1,
                     type=float,
                     help='gradient clipping parameter for q')
 parser.add_argument('--gpu', default=0, type=int, help='which gpu to use')
@@ -212,16 +212,14 @@ def tg_main(args):
             args.q_lr = 0.
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
-        # print('Starting epoch %d' % epoch)
         train_q_entropy = 0.
         num_sents = 0.
         num_words = 0.
         b = 0
-        for i in np.random.permutation(len(train_data)):
+        for i in np.random.permutation(len(train_data)): # one step
             if args.kl_warmup > 0:
                 kl_pen = min(1., kl_pen + kl_warmup_batch)
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[i]
-            # print("Sentences: ", sents)
             if length == 1:
                 # we ignore length 1 sents during training/eval since we work with binary trees only
                 continue
@@ -236,7 +234,6 @@ def tg_main(args):
                 if epoch <= args.train_q_epochs:
                     obj += kl_pen * q_entropy.mean()
                 train_q_entropy += q_entropy.sum().item()
-                # print("All actions: ", all_actions)
             else:
                 raise NotImplementedError # NOTE: WE DON'T NEED THIS
             (-obj.mean()).backward()
@@ -293,7 +290,7 @@ def tg_main(args):
             wandb.log({'Best Validation Perplexity': best_val_ppl})
             wandb.log({'Best Log Likelihood': best_val_ll})
         print('--------------------------------')
-        if val_ppl < best_val_ppl:
+        if val_ll > best_val_ll:
             best_val_ppl = val_ppl
             best_val_ll = val_ll
             checkpoint = {
