@@ -28,9 +28,9 @@ parser.add_argument(
 parser.add_argument('--num_layers',
                     default=16,
                     type=int,
-                    help='Number of TG Layers and the stack LSTM (for RNNG)')
+                    help='Number of TG Layers')
 parser.add_argument('--dropout',
-                    default=0.5,
+                    default=0.25,
                     type=float,
                     help='Dropout rate for Embedding, Position Encoding and\
                     TG Decoder Layers.')
@@ -52,7 +52,7 @@ parser.add_argument('--dropoutatt',
                     type=float,
                     help='Dropout rate for Attention Layer.')
 parser.add_argument('--q_dim',
-                    default=20,
+                    default=80,
                     type=int,
                     help='Hidden dimension for Leaf LSTM in Q Inference Net')
 
@@ -90,7 +90,7 @@ parser.add_argument('--lr',
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
-                    default=0.5,
+                    default=0.01,
                     type=float,
                     help='learning rate for inference network q')
 parser.add_argument('--lr_decay',
