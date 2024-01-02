@@ -97,10 +97,14 @@ parser.add_argument('--lr_decay',
                     default=0.5,
                     type=float,
                     help='After warmup_epochs, we have lr decayed by this param.')
-parser.add_argument('--kl_warmup',
+parser.add_argument('--kl_cost_annealing_warmup',
                     default=2,
                     type=int,
-                    help='KL-Annealing Decay.')
+                    help='KL Cost Annealing, to solve KL Vanishing Problem i.e. Posterior Collapse')
+parser.add_argument('--kl_pen_max',
+                    default=0.8,
+                    type=float,
+                    help='maximum KL penalty term')
 parser.add_argument('--train_q_epochs', default=2, type=int, help='')
 parser.add_argument('--param_init',
                     default=0.1,
@@ -124,7 +128,8 @@ parser.add_argument('--wandb', action='store_true', help='use wandb')
 parser.add_argument('--wandb_entity', default='anonymous', type=str, help='wandb entity')
 parser.add_argument('--run_name', default='tg114514', type=str, help='wandb run name')
 parser.add_argument('--wandb_key', default='', type=str, help='wandb key')
-# TODO: Add wandb support.
+
+
 def tg_main(args):
     # 0. Preprocessing
     np.random.seed(args.seed)
@@ -167,6 +172,10 @@ def tg_main(args):
         if args.param_init > 0:
             for param in model.parameters():
                 param.data.uniform_(-args.param_init, args.param_init)
+        print('-' * 50)
+        print('Model Architecture:')
+        print(model)
+        print('-' * 50)
     else:
         print('loading model from ' + args.ckpt_path)
         checkpoint = torch.load(args.ckpt_path)
@@ -190,9 +199,9 @@ def tg_main(args):
         wandb.watch(model)
     epoch = 0
     lr_decay = False
-    if args.kl_warmup > 0:
+    if args.kl_cost_annealing_warmup > 0:
         kl_pen = 0.
-        kl_warmup_batch = 1. / (args.kl_warmup * len(train_data))
+        kl_cost_annealing_warmup_batch = 1. / (args.kl_cost_annealing_warmup * len(train_data))
     else:
         kl_pen = 1.
     best_val_ppl = 5e5
@@ -203,7 +212,7 @@ def tg_main(args):
                             count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = torch.exp(-best_val_ll)
     all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
-    
+     
     # 2. 开始训练, 一共训练 args.num_epochs 轮
     for epoch in tqdm(range(args.num_epochs)):
         start_time = time.time()
@@ -217,8 +226,8 @@ def tg_main(args):
         num_words = 0.
         b = 0
         for i in np.random.permutation(len(train_data)): # one step
-            if args.kl_warmup > 0:
-                kl_pen = min(1., kl_pen + kl_warmup_batch)
+            if args.kl_cost_annealing_warmup > 0:
+                kl_pen = min(args.kl_pen_max, kl_pen + kl_cost_annealing_warmup_batch)
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[i]
             if length == 1:
                 # we ignore length 1 sents during training/eval since we work with binary trees only
@@ -275,6 +284,7 @@ def tg_main(args):
                 wandb.log({'Average train_q_entropy': train_q_entropy / num_sents})
                 wandb.log({'Train Perplexity': torch.exp(-obj.mean())})
                 wandb.log({'Train Log Likelihood': obj.mean()})
+                wandb.log({'KL Penalty': kl_pen})
         print('--------------------------------')
         print('Checking validation performance...')
         val_ll = tg_eval(val_data,
