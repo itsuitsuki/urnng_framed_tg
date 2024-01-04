@@ -98,7 +98,7 @@ parser.add_argument('--lr_decay',
                     type=float,
                     help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_cost_annealing_warmup',
-                    default=2,
+                    default=1.2,
                     type=int,
                     help='KL Cost Annealing, to solve KL Vanishing Problem i.e. Posterior Collapse')
 parser.add_argument('--kl_pen_max',
@@ -224,7 +224,8 @@ def tg_main(args):
         train_q_entropy = 0.
         num_sents = 0.
         num_words = 0.
-        b = 0
+        b = 0.
+        kl_pen = 0.
         for i in np.random.permutation(len(train_data)): # one step
             if args.kl_cost_annealing_warmup > 0:
                 kl_pen = min(args.kl_pen_max, kl_pen + kl_cost_annealing_warmup_batch)
