@@ -396,7 +396,7 @@ class TransformerGrammar(nn.Module):
             use_mask=True,
             document_level=False,
             return_h=False,
-            return_prob=True,
+            return_prob=False,
             return_action_score=False,
             max_relative_length=None,
             min_relative_length=None,
@@ -519,32 +519,19 @@ class TransformerGrammar(nn.Module):
 
         logits = self.projection(core_out)
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
-        prob = logits.view(seq_len, batch_size, -1)
-        # normalize
-        prob = torch.sigmoid(prob).clamp(min=1e-8, max=1 - 1e-8)
-        prob = prob.permute(0, 2, 1)
+        # ELBO loss = -E_q[log p(x|z)] + KL(q(z|x) || p(z))
+        # Monte Carlo Estimation of ELBO: -1/N * sum(log p(x|z)) + KL(q(z|x) || p(z))
+        # We use the first term as the loss of p-net here.
+        # The second term is the KL divergence between q(z|x) and p(z), 
+        # which is not computed in this submodel.
+        # The first term needs to be meaned.
+        loss = crit(logits.view(-1, self.vocab_size), targets.view(-1)) # shape: (batch_size * seq_len, )
+        loss = loss.view(targets.size(0), targets.size(1)) # shape: (seq_len, batch_size)
         
-        # print("-" * 50)
-        # print("prob shape: ", prob.shape)
-        # print("targets shape: ", targets.shape)
-        loss = crit(prob, targets)
-        loss = loss.permute(1, 0).contiguous()
-        loss = loss.sum(1)  # given by cross entropy
-        # print("loss shape: ", loss.shape)
+        loss = loss.sum(0) # shape: (batch_size, )
         if return_h:
-            loss = loss.contiguous().view(-1, batch_size)
             return loss, core_out
-        elif return_prob:
-            loss = loss.contiguous().view(-1, batch_size)
-            # prob = prob.contiguous().view(batch_size, -1)
-            # print("-" * 50)
-            # print("Return Prob = True.")
-            # print("prob shape: ", prob.shape)
-            # print("loss shape: ", loss.shape)
-            # print("attn mask shape: ", attn_mask.shape)
-            return loss, prob, attn_mask
         else:
-            loss = loss.contiguous().view(-1, batch_size)
             return loss
 
 
@@ -703,22 +690,6 @@ class TransformerGrammarPlusQNet(nn.Module):
             i += 1
         return tree_id
 
-    # forward propagation
-    def _forward_Q_CRF(self, scores, parse_length, batch_size, samples):
-        # scores: scores = scores / is_temp
-        self.q_crf._forward(scores)
-        self.q_crf._entropy(scores)
-
-        crf_input = scores.unsqueeze(1).expand(batch_size, samples,
-                                               parse_length, parse_length)
-        crf_input = crf_input.contiguous().view(batch_size * samples,
-                                                parse_length, parse_length)
-        for i in range(len(self.q_crf.alpha)):
-            for j in range(len(self.q_crf.alpha)):
-                self.q_crf.alpha[i][j] = self.q_crf.alpha[i][j].unsqueeze(
-                    1).expand(batch_size,
-                              samples).contiguous().view(batch_size * samples)
-        return self.q_crf._sample(crf_input, self.q_crf.alpha)
 
     def _forward_TG(self,
                     input_batch,
@@ -740,23 +711,19 @@ class TransformerGrammarPlusQNet(nn.Module):
     def forward(
         self,
         x,
-        samples=1,  # TODO: Figure out what is `samples`
-        is_temp=1.,
+        samples=5,
+        is_temp=1., # temperature for QNet, default is 1, if is_temp is not 1, then scores = scores / is_temp. 
+        # Why we need this? Because we want to use the scores to calculate the entropy, and the entropy is used to calculate the loss.
+        # If we use the scores to calculate the entropy, the entropy will be too large, and the loss will be too small.
+        # So we need to divide the scores by a temperature to make the entropy and loss reasonable.
         has_eos=True,
         mode='default',
         max_seq_len=768,
         mem_len=768,
     ):
 
-        # prepare for masking and original input
-        # print('-' * 50)
-        # print("Preparing for Forwarding")
-        # print("x shape: ", x.shape)
         x = x[:, 1:]
-        # print("x shape after x=x[:,1:]  : ", x.shape)
         batch_size, length = x.size(0), x.size(1)
-        # print("Batch Size: ", batch_size)
-        # print("Length: ", length)
         ranges = self.get_ranges(self.bos_id, self.pad_id, self.eos_id, self.left_arc, self.right_arc)
 
         maskrules = masking_utils.get_masking_rules(
@@ -774,7 +741,7 @@ class TransformerGrammarPlusQNet(nn.Module):
             parse_length = length
             parse_x = x
 
-        # q inference net forward. left/right(2 test trees)  /Q.
+        # q inference net forward. left/right(2 toy example trees)/Q.
         if mode == 'left':
             tree_brackets = []
             for i in range(batch_size):
@@ -787,15 +754,21 @@ class TransformerGrammarPlusQNet(nn.Module):
                 tree_brackets.append(tree)
         else:
             # use Q Inference Net to get the label.
-            # FIXME: Maybe some problems because 我把QNet的推理单独提进新的函数了
             scores = self.get_span_scores(parse_x)
             self.scores = scores
             scores = scores / is_temp
-            # print("Q Inference CRF Net Forwarding")
-            _, log_probs_action_q, tree_brackets, spans = self._forward_Q_CRF(
-                scores, parse_length, batch_size, samples)
-            # print("Tree Brackets: ", tree_brackets)
+            self.q_crf._forward(scores)
+            self.q_crf._entropy(scores)
             entropy = self.q_crf.entropy[0][parse_length - 1]
+            crf_input = scores.unsqueeze(1).expand(batch_size, samples, parse_length, parse_length)
+            crf_input = crf_input.contiguous().view(batch_size * samples, parse_length, parse_length)
+            for i in range(len(self.q_crf.alpha)):
+                for j in range(len(self.q_crf.alpha)):
+                    self.q_crf.alpha[i][j] = self.q_crf.alpha[i][j].unsqueeze(1).expand(
+                        batch_size, samples).contiguous().view(batch_size * samples)
+            # print(2)
+            ##sample tree
+            _, log_probs_action_q, tree_brackets, spans = self.q_crf._sample(crf_input, self.q_crf.alpha)
             
 
         # prepare for p tg net forward + process q net output
@@ -805,8 +778,11 @@ class TransformerGrammarPlusQNet(nn.Module):
         labels = []
         actions = []
         max_len_tmp = 0
-        # print("Tree brackets: ", tree_brackets)
-        # print("Preparing input for TG Net + Processing Q Net output")
+        
+        
+        # batch_expand = batch_size * samples, which is the number of samples over all the sentences in the batch.
+        
+        
         for b in range(batch_size * samples):
             # add NT
             from utils import get_actions
@@ -874,34 +850,26 @@ class TransformerGrammarPlusQNet(nn.Module):
         inputs = np.array(inputs)
         labels = np.array(labels)
 
-        inp = torch.LongTensor(inputs.T).cuda()  # l_inp * B
+        inp = torch.LongTensor(inputs.T).cuda()  # l_inp * B, where B=batch_size*seq_len
         tgt = torch.LongTensor(labels.T).cuda()  # l_tgt(=l_inp) * B
         tgt_len = tgt.size(0)
         inp_len = inp.size(0)
-        batch_expand = batch_size * samples
-
+        
         # p tg net forward
-        # 上面的 attn_masks 和 attn_relpos 已经在 _forward_TG 中创建与填充，不需要了
-        loss, log_probs_action_p, tg_attn_mask = self._forward_TG(input_batch=inputs, 
-                                                    length=inp_len, 
-                                                    use_mask=True,
-                                                    document_level=False,
-                                                    return_h=False,
-                                                    return_prob=True,
-                                                    return_action_score=False,
-                                                    min_relative_length=None, 
-                                                    max_relative_length=None,
-                                                    max_seq_len=max_seq_len,
-                                                    max_mem_len=mem_len)
-        log_p = -loss
-        # print("-" * 50)
-        # print("TG Net Forwarding Done")
-        # print("log_p shape: ", log_p.shape)
-        # print("log_probs_action_p shape: ", log_probs_action_p.shape)
-        # return
+        # 上面的 attn_masks 和 attn_relpos 已经在 _forward_TG 中创建与填充
+        loss = self._forward_TG(input_batch=inputs,
+                                length=inp_len,
+                                use_mask=True,
+                                document_level=False,
+                                min_relative_length=None, 
+                                max_relative_length=None,
+                                max_seq_len=max_seq_len,
+                                max_mem_len=mem_len)
+        # loss: neg log probs sum of tgts
+        p_log_ll = -loss # one of obj, shape: (B, )
         if mode not in ['left', 'right']:
             log_probs_action_q = log_probs_action_q.contiguous().view(
                 batch_size, samples)
-            return log_p, log_probs_action_p, log_probs_action_q, actions, entropy, tg_attn_mask
+            return p_log_ll, log_probs_action_q, actions, entropy
         else:
-            return log_p, log_probs_action_p, None, actions, None, tg_attn_mask
+            return p_log_ll, None, actions, None

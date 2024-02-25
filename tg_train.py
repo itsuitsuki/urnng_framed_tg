@@ -26,11 +26,11 @@ parser.add_argument(
     type=int,
     help='Hidden dimension for LM/TG. Word Embedding Dimension')
 parser.add_argument('--num_layers',
-                    default=16,
+                    default=12,
                     type=int,
                     help='Number of TG Layers')
 parser.add_argument('--dropout',
-                    default=0.25,
+                    default=0.4,
                     type=float,
                     help='Dropout rate for Embedding, Position Encoding and\
                     TG Decoder Layers.')
@@ -39,7 +39,7 @@ parser.add_argument('--n_head',
                     type=int,
                     help='Number of Attention Heads.')
 parser.add_argument('--d_head',
-                    default=38,
+                    default=30,
                     type=int,
                     help='Dimension of Attention Heads.')
 parser.add_argument(
@@ -48,11 +48,11 @@ parser.add_argument(
     type=int,
     help='Dimension of Inner Layer in Position-wise Feedforward Net.')
 parser.add_argument('--dropoutatt',
-                    default=0.1,
+                    default=0.2,
                     type=float,
                     help='Dropout rate for Attention Layer.')
 parser.add_argument('--q_dim',
-                    default=80,
+                    default=300,
                     type=int,
                     help='Hidden dimension for Leaf LSTM in Q Inference Net')
 
@@ -80,27 +80,27 @@ parser.add_argument('--mode',
 parser.add_argument('--eval_samples',
                     default=3,
                     type=int,
-                    help='how many samples for evaluation')
+                    help='how many samples for evaluation Monte Carlo Sampling')
 parser.add_argument('--samples',
                     default=10,
                     type=int,
-                    help='how many samples for score function gradients')
+                    help='how many samples for training Monte Carlo Sampling')
 parser.add_argument('--lr',
-                    default=1,
+                    default=5e-4,
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
-                    default=0.0001,
+                    default=1e-4,
                     type=float,
                     help='learning rate for inference network q')
 parser.add_argument('--lr_decay',
-                    default=0.5,
+                    default=0.8,
                     type=float,
                     help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_cost_annealing_warmup',
                     default=1.2,
                     type=int,
-                    help='KL Cost Annealing, to solve KL Vanishing Problem i.e. Posterior Collapse')
+                    help='KL Cost Annealing, trying to solve KL Vanishing Problem i.e. Posterior Collapse')
 parser.add_argument('--kl_pen_max',
                     default=0.8,
                     type=float,
@@ -201,17 +201,17 @@ def tg_main(args):
     lr_decay = False
     if args.kl_cost_annealing_warmup > 0:
         kl_pen = 0.
-        kl_cost_annealing_warmup_batch = 1. / (args.kl_cost_annealing_warmup * len(train_data))
+        kl_ann_every_batch = 1. / (args.kl_cost_annealing_warmup * len(train_data))
     else:
         kl_pen = 1.
-    best_val_ppl = 5e5
+    best_val_ppl = float("inf")
     samples = args.samples
     best_val_ll = tg_eval(val_data,
                             model,
                             samples=args.eval_samples,
                             count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = torch.exp(-best_val_ll)
-    all_stats = [[0., 0., 0.]]  # true pos, false pos, false neg for f1 calc
+    all_stats = [[0, 0, 0]]  # true pos, false pos, false neg for f1 calc
      
     # 2. 开始训练, 一共训练 args.num_epochs 轮
     for epoch in tqdm(range(args.num_epochs)):
@@ -228,7 +228,7 @@ def tg_main(args):
         kl_pen = 0.
         for i in np.random.permutation(len(train_data)): # one step
             if args.kl_cost_annealing_warmup > 0:
-                kl_pen = min(args.kl_pen_max, kl_pen + kl_cost_annealing_warmup_batch)
+                kl_pen = min(args.kl_pen_max, kl_pen + kl_ann_every_batch)
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[i]
             if length == 1:
                 # we ignore length 1 sents during training/eval since we work with binary trees only
@@ -238,11 +238,28 @@ def tg_main(args):
             q_optimizer.zero_grad()
             optimizer.zero_grad()
             if args.mode == 'unsupervised':
-                likelihood_p, prob_p, ll_action_q, all_actions, q_entropy, p_attn_mask = model(
-                    sents, samples=samples, has_eos=True)
-                obj = likelihood_p.mean(1)
+                likelihood_p, prob_p, ll_action_q, all_actions, q_entropy = model.forward(sents, samples=samples, has_eos=True)
+                # ll_p: likelihood of 
+                # obj = likelihood_p.mean(1)
+                # if epoch <= args.train_q_epochs:
+                #     obj += kl_pen * q_entropy.mean()
+                # train_q_entropy += q_entropy.sum().item()
+                
+                # log_f = likelihood_p + kl_pen*ll_action_p 
+                # iwae_ll = log_f.mean(1).detach() + kl_pen*q_entropy.detach() # shape: (batch_size * samples, )
+                obj = likelihood_p # shape: (batch_size * samples, )
                 if epoch <= args.train_q_epochs:
-                    obj += kl_pen * q_entropy.mean()
+                    obj += kl_pen*q_entropy
+                # baseline = torch.zeros_like(log_f)
+                # baseline_k = torch.zeros_like(log_f)
+                baseline = torch.zeros_like(likelihood_p) # shape: (batch_size * samples, )
+                baseline_k = torch.zeros_like(likelihood_p) # shape: (batch_size * samples, )
+                for k in range(samples):
+                    baseline_k.copy_(likelihood_p)
+                    baseline_k[:, k].fill_(0)
+                    baseline[:, k] =  baseline_k.detach().sum(1) / (samples - 1)
+                obj += ((likelihood_p.detach() - baseline.detach())*ll_action_q).mean(1)                      
+                # kl = (ll_action_q - ll_action_p).mean(1).detach()
                 train_q_entropy += q_entropy.sum().item()
             else:
                 raise NotImplementedError # NOTE: WE DON'T NEED THIS
@@ -327,7 +344,7 @@ def tg_main(args):
 
     print("Training Finished!")
 
-def tg_eval(data, model, samples=0, count_eos_ppl=0):
+def tg_eval(data, model, samples=5, count_eos_ppl=0):
     # print('-'*50)
     # print("TG EVAL")
     # print("Data length: ", len(data))
@@ -349,16 +366,14 @@ def tg_eval(data, model, samples=0, count_eos_ppl=0):
                 sents = sents[:, :-1]
                 tree_length = length
             sents = sents.cuda()
-            log_likelihood, prob_p, ll_action_q_all, all_actions, q_entropy, p_attn_mask = model(
+            log_likelihood, likeli_action_q_all, all_actions, q_entropy = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
             # log likelihood is i.e. ll
             num_sents += batch_size
             num_words += batch_size * length
-            batch_log_ll, ll_action_q = log_likelihood.mean(1), ll_action_q_all.mean(1)
+            batch_log_ll, ll_action_q = log_likelihood.mean(1), likeli_action_q_all.mean(1)
             total_log_ll += batch_log_ll
     mean_log_ll = total_log_ll / num_sents
-    # note that corpus F1 printed here is different from what you should get from
-    # evalb since we do not ignore any tags (e.g. punctuation), while evalb ignores it
     model.train()
     return mean_log_ll
 
