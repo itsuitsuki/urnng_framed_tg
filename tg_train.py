@@ -172,10 +172,10 @@ def tg_main(args):
         if args.param_init > 0:
             for param in model.parameters():
                 param.data.uniform_(-args.param_init, args.param_init)
-        print('-' * 50)
-        print('Model Architecture:')
-        print(model)
-        print('-' * 50)
+        # print('-' * 50)
+        # print('Model Architecture:')
+        # print(model)
+        # print('-' * 50)
     else:
         print('loading model from ' + args.ckpt_path)
         checkpoint = torch.load(args.ckpt_path)
@@ -206,15 +206,18 @@ def tg_main(args):
         kl_pen = 1.
     best_val_ppl = float("inf")
     samples = args.samples
-    best_val_ll = tg_eval(val_data,
+    best_val_ll = tg_eval_only_log_likeli(val_data,
                             model,
                             samples=args.eval_samples,
                             count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = torch.exp(-best_val_ll)
+    print('-' * 50)
+    print('Initial Validation PPL: %.2f, Initial Validation Log Likelihood: %.2f' % (best_val_ppl, best_val_ll))
     all_stats = [[0, 0, 0]]  # true pos, false pos, false neg for f1 calc
      
     # 2. 开始训练, 一共训练 args.num_epochs 轮
-    for epoch in tqdm(range(args.num_epochs)):
+    tqdm_pbar = tqdm(total=args.num_epochs * len(train_data))
+    for epoch in range(args.num_epochs):
         start_time = time.time()
         if epoch > args.train_q_epochs:
             # stop training q after this many epochs
@@ -227,6 +230,7 @@ def tg_main(args):
         b = 0.
         kl_pen = 0.
         for i in np.random.permutation(len(train_data)): # one step
+            tqdm_pbar.update(1)
             if args.kl_cost_annealing_warmup > 0:
                 kl_pen = min(args.kl_pen_max, kl_pen + kl_ann_every_batch)
             sents, length, batch_size, gold_actions, gold_spans, gold_binary_trees, other_data = train_data[i]
@@ -238,17 +242,20 @@ def tg_main(args):
             q_optimizer.zero_grad()
             optimizer.zero_grad()
             if args.mode == 'unsupervised':
-                likelihood_p, prob_p, ll_action_q, all_actions, q_entropy = model.forward(sents, samples=samples, has_eos=True)
+                likelihood_p, ll_action_q, all_actions, q_entropy = model.forward(sents, samples=samples, has_eos=True)
                 # ll_p: likelihood of 
                 # obj = likelihood_p.mean(1)
                 # if epoch <= args.train_q_epochs:
                 #     obj += kl_pen * q_entropy.mean()
                 # train_q_entropy += q_entropy.sum().item()
-                
                 # log_f = likelihood_p + kl_pen*ll_action_p 
                 # iwae_ll = log_f.mean(1).detach() + kl_pen*q_entropy.detach() # shape: (batch_size * samples, )
+            
                 obj = likelihood_p # shape: (batch_size * samples, )
+                obj = obj.mean() # shape: (batch_size, )
+
                 if epoch <= args.train_q_epochs:
+                    q_entropy = q_entropy.mean()
                     obj += kl_pen*q_entropy
                 # baseline = torch.zeros_like(log_f)
                 # baseline_k = torch.zeros_like(log_f)
@@ -258,12 +265,12 @@ def tg_main(args):
                     baseline_k.copy_(likelihood_p)
                     baseline_k[:, k].fill_(0)
                     baseline[:, k] =  baseline_k.detach().sum(1) / (samples - 1)
-                obj += ((likelihood_p.detach() - baseline.detach())*ll_action_q).mean(1)                      
+                obj += ((likelihood_p.detach() - baseline.detach())*ll_action_q).mean()                   
                 # kl = (ll_action_q - ll_action_p).mean(1).detach()
                 train_q_entropy += q_entropy.sum().item()
             else:
                 raise NotImplementedError # NOTE: WE DON'T NEED THIS
-            (-obj.mean()).backward()
+            -obj.mean().backward()
             if args.max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model_params,
                                                args.max_grad_norm)
@@ -305,7 +312,7 @@ def tg_main(args):
                 wandb.log({'KL Penalty': kl_pen})
         print('--------------------------------')
         print('Checking validation performance...')
-        val_ll = tg_eval(val_data,
+        val_ll = tg_eval_only_log_likeli(val_data,
                         model,
                         samples=args.eval_samples,
                         count_eos_ppl=args.count_eos_ppl)
@@ -341,10 +348,10 @@ def tg_main(args):
             for param_group in q_optimizer.param_groups:
                 param_group['lr'] = args.q_lr
             print('Learning rate decreased to %.4f' % args.lr)
-
+    tqdm_pbar.close()
     print("Training Finished!")
 
-def tg_eval(data, model, samples=5, count_eos_ppl=0):
+def tg_eval_only_log_likeli(data, model, samples=5, count_eos_ppl=0):
     # print('-'*50)
     # print("TG EVAL")
     # print("Data length: ", len(data))
@@ -368,10 +375,11 @@ def tg_eval(data, model, samples=5, count_eos_ppl=0):
             sents = sents.cuda()
             log_likelihood, likeli_action_q_all, all_actions, q_entropy = model(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
-            # log likelihood is i.e. ll
+            # log likelihood is i.e. ll, shape: (batch_size * samples, )
+            # likeli_action_q_all, shape: (batch_size * samples, )
             num_sents += batch_size
             num_words += batch_size * length
-            batch_log_ll, ll_action_q = log_likelihood.mean(1), likeli_action_q_all.mean(1)
+            batch_log_ll = log_likelihood.mean(0)
             total_log_ll += batch_log_ll
     mean_log_ll = total_log_ll / num_sents
     model.train()
