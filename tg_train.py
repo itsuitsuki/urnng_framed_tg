@@ -204,7 +204,6 @@ def tg_main(args):
         kl_ann_every_batch = 1. / (args.kl_cost_annealing_warmup * len(train_data))
     else:
         kl_pen = 1.
-    best_val_ppl = float("inf")
     samples = args.samples
     best_val_ll = tg_eval_only_log_likeli(val_data,
                             model,
@@ -260,11 +259,11 @@ def tg_main(args):
                 # baseline = torch.zeros_like(log_f)
                 # baseline_k = torch.zeros_like(log_f)
                 baseline = torch.zeros_like(likelihood_p) # shape: (batch_size * samples, )
-                baseline_k = torch.zeros_like(likelihood_p) # shape: (batch_size * samples, )
+                baseline_out_of_k = torch.zeros_like(likelihood_p) # shape: (batch_size * samples, )
                 for k in range(samples):
-                    baseline_k.copy_(likelihood_p)
-                    baseline_k[:, k].fill_(0)
-                    baseline[:, k] =  baseline_k.detach().sum(1) / (samples - 1)
+                    baseline_out_of_k.copy_(likelihood_p)
+                    baseline_out_of_k[k].fill_(0)
+                    baseline[k] =  baseline_out_of_k.detach().sum(1) / (samples - 1)
                 obj += ((likelihood_p.detach() - baseline.detach())*ll_action_q).mean()                   
                 # kl = (ll_action_q - ll_action_p).mean(1).detach()
                 train_q_entropy += q_entropy.sum().item()
