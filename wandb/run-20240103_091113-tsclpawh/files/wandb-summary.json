@@ -1,0 +1,1 @@
+{"epoch": 0, "_timestamp": 1704247058.7886758, "_runtime": 2785.7218477725983, "_step": 5137, "lr": 0.5, "q_lr": 0.1, "Average train_q_entropy": 24.572388986596305, "Train Perplexity": Infinity, "Train Log Likelihood": -852.6389770507812, "KL Penalty": 0.1444881889763797, "_wandb": {"runtime": 2783}}
