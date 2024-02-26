@@ -263,13 +263,17 @@ def tg_main(args):
                 for k in range(samples):
                     baseline_out_of_k.copy_(likelihood_p)
                     baseline_out_of_k[k].fill_(0)
-                    baseline[k] =  baseline_out_of_k.detach().sum(1) / (samples - 1)
-                obj += ((likelihood_p.detach() - baseline.detach())*ll_action_q).mean()                   
+                    baseline[k] =  baseline_out_of_k.detach().sum() / (samples - 1)
+                # how to become shape: (batch_size*sample, 1)?
+                ll_action_q = ll_action_q.view(-1)
+                diff = likelihood_p.detach() - baseline.detach()
+                obj += (diff * ll_action_q).mean()                   
                 # kl = (ll_action_q - ll_action_p).mean(1).detach()
                 train_q_entropy += q_entropy.sum().item()
             else:
                 raise NotImplementedError # NOTE: WE DON'T NEED THIS
-            -obj.mean().backward()
+            final_loss = -obj.mean()
+            final_loss.backward()
             if args.max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model_params,
                                                args.max_grad_norm)
