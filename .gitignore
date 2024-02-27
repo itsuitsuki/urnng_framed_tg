@@ -28,3 +28,5 @@
 */.idea
 .idea/vcs.xml
 .idea/
+/wandb/
+wandb/*
