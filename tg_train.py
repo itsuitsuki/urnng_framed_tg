@@ -310,7 +310,7 @@ def tg_main(args):
             if b % args.print_every == 0:
                 log_str = 'Train Info: Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training Aver qEntropy: %.4f, ' + \
                           'Train Aver PPL for TG LOG LL: %.2f, Train Aver TG Neg LOG LL: %.2f, ' + \
-                          'Train Aver IWAE PPL: %.2f, Train Aver IWAE Neg Log Likelihood: %.2f,' + \
+                          'Train Aver IWAE PPL: %.2f, Train Aver IWAE Neg Log Likelihood: %.2f, ' + \
                           'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
                           'Throughput: %.2f examples/sec'
                 print(
@@ -345,12 +345,12 @@ def tg_main(args):
                         count_eos_ppl=args.count_eos_ppl)
         val_ppl = np.exp(-val_ll)
         print("Val PPL: ", val_ppl)
-        print("Val IWAE Log Likelihood: ", val_ll)
+        print("Val IWAE Neg Log Likelihood: ", -val_ll)
         if args.wandb:
             wandb.log({'Validation Perplexity': val_ppl})
-            wandb.log({'Validation IWAE Log Likelihood': val_ll})
+            wandb.log({'Validation IWAE Neg Log Likelihood': -val_ll})
             wandb.log({'Best Validation Perplexity': best_val_ppl})
-            wandb.log({'Best IWAE Log Likelihood': best_val_ll})
+            wandb.log({'Best IWAE Neg Log Likelihood': -best_val_ll})
         print('--------------------------------')
         if val_ll > best_val_ll:
             best_val_ppl = val_ppl
