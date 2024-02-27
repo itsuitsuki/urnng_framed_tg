@@ -299,7 +299,7 @@ def tg_main(args):
             num_words += batch_size * length
             total_sent_ll += log_ll_p.sum().item() # shape: (batch_size, )
             total_sent_obj += obj.item()
-            total_sent_iwae_ll = iwae_ll.sum().item()
+            total_sent_iwae_ll += iwae_ll.sum().item()
             for bb in range(batch_size):
                 action = list(all_actions[bb].long().cpu().numpy())
                 span_b = get_spans(action)
