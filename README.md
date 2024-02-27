@@ -8,6 +8,8 @@ python preprocess.py --trainfile data/train_02-21.LDC99T42 --valfile data/dev_24
 
 Running this will save the following files in the `data/` folder: `ptb-train.pkl`, `ptb-val.pkl`, `ptb-test.pkl`, `ptb.dict`. Here `ptb.dict` is the word-idx mapping, and you can change the output folder/name by changing the argument to `outputfile`. Also, the preprocessing here will replace singletons with a single `<unk>` rather than with Berkeley parser's mapping rules (see below for results using this setup).
 
+**We don't consider the tags of the NTs in groundtruths.**
+
 ## Transformer Grammars CMake Building
 
 ### For Windows 10
@@ -42,8 +44,6 @@ cmake ..
 make -j
 ```
 
-
-
 ## Training
 
 To train the U-TG:
@@ -51,14 +51,11 @@ To train the U-TG:
 ```powershell
 python tg_train.py --train_file data/ptb-train.pkl --val_file data/ptb-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
 
-# for the test
-python tg_train.py --train_file data/ptb_20231103-train.pkl --val_file data/ptb_20231103-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
-python tg_train.py --train_file data/ptb_20231129-train.pkl --val_file data/ptb_20231129-val.pkl --save_path /ckpt/utg_ckpt.pt --mode unsupervised --gpu 0
+# debug
+python tg_train.py --train_file data/ptb_20231129-train.pkl --val_file data/ptb_20231129-val.pkl --save_path /ckpt/utg_ckpt_240103_1.pt --mode unsupervised --gpu 0 --samples 2 --lr 0.00005 --q_lr 0.0001
 ```
 
 ## Evaluation
-
-
 
 ```powershell
 python eval_ppl.py --model_file /ckpt/utg_ckpt.pt --test_file data/ptb-test.pkl --samples 1000 --is_temp 2 --gpu 0
@@ -71,17 +68,14 @@ python eval_ppl.py --model_file /ckpt/utg_ckpt.pt --test_file data/ptb-test.pkl 
    ```powershell
    python parse.py --model_file /ckpt/utg_ckpt.pt --data_file data/ptb-test.txt --out_file pred-parse.txt --gold_out_file gold-parse.txt --gpu 0
    ```
-
-   
-
 2. Evalb evaluation
 
    ```powershell
    evalb -p COLLINS.prm gold-parse.txt test-parse.txt
    ```
-   
 
 ## FAQ
+
 ### 1. ImportError: /lib64/libstdc++.so.6: version `GLIBCXX_3.4.20` not found
 
 The GPU is not allocated / available, or GCC version is obsolete (the version should >= 4.9)

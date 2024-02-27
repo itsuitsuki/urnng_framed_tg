@@ -45,7 +45,7 @@ def get_tree(actions, sent=None, SHIFT=0, REDUCE=1):
         elif action == REDUCE:
             right = stack.pop()
             left = stack.pop()
-            stack.append('(' + left + ' ' + right + ')')
+            stack.append('(S ' + left + ' ' + right + ' S)')
     assert (len(stack) == 1)
     return stack[-1]
 

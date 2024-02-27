@@ -122,7 +122,7 @@ def main(args):
   model.eval()
   model.cuda()
   corpus_f1 = [0., 0., 0.] 
-  sent_f1 = [] 
+  sent_f1 = []
   pred_out = open(args.out_file, "w")
   gold_out = open(args.gold_out_file, "w")
   with torch.no_grad():

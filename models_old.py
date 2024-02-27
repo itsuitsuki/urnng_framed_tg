@@ -127,7 +127,7 @@ class PositionalEmbedding(nn.Module):
             return pos_emb[:, None, :]  # r * None * d_model
 
 
-class RNNG(nn.Module):
+class UTG(nn.Module):
     def __init__(self, vocab=100,
                  w_dim=20,
                  #  h_dim = 20,
@@ -146,7 +146,7 @@ class RNNG(nn.Module):
                  mem_len=None,
                  pre_lnorm=False,
                  same_emb=False):
-        super(RNNG, self).__init__()
+        super(UTG, self).__init__()
         self.S = 0  # action idx for shift/generate
         self.R = 1  # action idx for reduce
         self.n_token = vocab

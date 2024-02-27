@@ -330,7 +330,6 @@ class TransformerGrammarLayer(nn.Module):
 
 
 class TransformerGrammar(nn.Module):
-
     def __init__(self,
                  vocab_size=10000,
                  w_dim=380,
@@ -395,9 +394,6 @@ class TransformerGrammar(nn.Module):
             length,  # 句子的最大长度
             use_mask=True,
             document_level=False,
-            return_h=False,
-            return_prob=False,
-            return_action_score=False,
             max_relative_length=None,
             min_relative_length=None,
             max_seq_len=512,
@@ -407,7 +403,7 @@ class TransformerGrammar(nn.Module):
         attn_relpos = []
         inputs = []
         targets = []
-        batch_size = len(input_batch)
+        batch_size = len(input_batch) # the #-of-sent of one batch
         if use_mask == False:
             # print("Use_mask is False.")
             length_i = max([len(sent) for sent in input_batch])
@@ -517,26 +513,30 @@ class TransformerGrammar(nn.Module):
                 core_out = self.dropout(core_out)
         core_out = self.dropout(core_out)
 
-        logits = self.projection(core_out)
+
+        # NOTE: "batch_size" here is batch_size*sample in outer training.
+        
+         
+        logits = self.projection(core_out) # shape: (seq_len, batch_size, vocab_size)
+        # the shape of `targets`: (seq_len, batch_size), targets is the groundtruth idx tensor.
+        targets_flatten = targets.view(-1) # shape: (seq_len * batch_size, )
+        # print(self.pad_id) # 0
+        logits_flatten = logits.view(-1, self.vocab_size) # shape: (seq_len * batch_size, vocab_size)
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
+        loss = crit(logits_flatten, targets_flatten) # (seq_len * bs, )
         # ELBO loss = -E_q[log p(x|z)] + KL(q(z|x) || p(z))
         # Monte Carlo Estimation of ELBO: -1/N * sum(log p(x|z)) + KL(q(z|x) || p(z))
         # We use the first term as the loss of p-net here.
         # The second term is the KL divergence between q(z|x) and p(z), 
         # which is not computed in this submodel.
         # The first term needs to be meaned.
-        loss = crit(logits.view(-1, self.vocab_size), targets.view(-1)) # shape: (batch_size * seq_len, )
         loss = loss.view(targets.size(0), targets.size(1)) # shape: (seq_len, batch_size)
-        
+        # loss = loss.sum(0) # shape: (batch_size, ) <-> loss = loss.mean(0) ??
         loss = loss.sum(0) # shape: (batch_size, )
-        if return_h:
-            return loss, core_out
-        else:
-            return loss
+        return loss
 
 
 class TransformerGrammarPlusQNet(nn.Module):
-
     def __init__(
         self,
         vocab_size=10000,
@@ -701,12 +701,12 @@ class TransformerGrammarPlusQNet(nn.Module):
                     return_action_score=False,
                     max_relative_length=None,
                     min_relative_length=None,
-                    max_seq_len=512,
-                    max_mem_len=512):
+                    max_seq_len=768,
+                    max_mem_len=768):
 
-        return self.tg_p_net(input_batch, length, use_mask, document_level,
-                             return_h, return_prob, return_action_score, max_relative_length,
-                             min_relative_length, max_seq_len=512, max_mem_len=512)
+        return self.tg_p_net.forward(input_batch, length, use_mask, document_level,
+                             max_relative_length,
+                             min_relative_length, max_seq_len, max_mem_len)
 
     def forward(
         self,
@@ -759,7 +759,7 @@ class TransformerGrammarPlusQNet(nn.Module):
             scores = scores / is_temp
             self.q_crf._forward(scores)
             self.q_crf._entropy(scores)
-            entropy = self.q_crf.entropy[0][parse_length - 1]
+            entropy = self.q_crf.entropy[0][parse_length - 1] # shape: (B, )
             crf_input = scores.unsqueeze(1).expand(batch_size, samples, parse_length, parse_length)
             crf_input = crf_input.contiguous().view(batch_size * samples, parse_length, parse_length)
             for i in range(len(self.q_crf.alpha)):
