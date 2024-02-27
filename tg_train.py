@@ -245,7 +245,7 @@ def tg_main(args):
             optimizer.zero_grad()
             if args.mode == 'unsupervised':
                 log_ll_p, ll_action_q, all_actions, q_entropy = model.forward(sents, samples=samples, has_eos=True)
-                print(ll_action_q.shape)
+                
                 # q_entropy: shape: (batch_size * samples, )
                 # q_entropy = q_entropy.contiguous().view(samples, batch_size) # (samples, batch_size)
                 # q_entropy = q_entropy.mean(0) # (batch_size, )
