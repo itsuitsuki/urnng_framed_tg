@@ -85,7 +85,7 @@ parser.add_argument('--samples',
                     type=int,
                     help='how many samples for training Monte Carlo Sampling')
 parser.add_argument('--lr',
-                    default=1,
+                    default=1e-3,
                     type=float,
                     help='starting learning rate')
 parser.add_argument('--q_lr',
@@ -101,11 +101,11 @@ parser.add_argument('--kl_cost_annealing_warmup',
                     type=int,
                     help='KL Cost Annealing, trying to solve KL Vanishing Problem i.e. Posterior Collapse')
 parser.add_argument('--kl_pen_max',
-                    default=0.2,
+                    default=1,
                     type=float,
                     help='maximum KL penalty')
-parser.add_argument('--train_q_epochs', default=1, type=int, help='Max number of epoch to train Q-Net. After these epochs, only TG will be trained.')
-parser.add_argument('--train_q_steps', default=3000, type=int, help='Max number of epoch to train Q-Net. After these steps, only TG will be trained.')
+parser.add_argument('--train_q_epochs', default=5, type=int, help='Max number of epoch to train Q-Net. After these epochs, only TG will be trained.')
+parser.add_argument('--train_q_steps', default=12000, type=int, help='Max number of epoch to train Q-Net. After these steps, only TG will be trained.')
 parser.add_argument('--param_init',
                     default=0.1,
                     type=float,
@@ -210,7 +210,7 @@ def tg_main(args):
                             count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = np.exp(-best_val_ll)
     print('-' * 50)
-    print('Initial Validation PPL: %.2f, Initial Validation IWAE Log Likelihood: %.2f' % (best_val_ppl, best_val_ll))
+    print('Initial Validation PPL: %.2f, Initial Validation IWAE Neg Log Likelihood: %.2f' % (best_val_ppl, -best_val_ll))
     all_stats = [[0, 0, 0]]  # true pos, false pos, false neg for f1 calc
      
     # 2. 开始训练, 一共训练 args.num_epochs 轮
@@ -311,14 +311,14 @@ def tg_main(args):
                 log_str = 'Train Info: Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training Aver qEntropy: %.4f, ' + \
                           'Train Aver PPL for TG LOG LL: %.2f, Train Aver TG Neg LOG LL: %.2f, ' + \
                           'Train Aver IWAE PPL: %.2f, Train Aver IWAE Neg Log Likelihood: %.2f, ' + \
-                          'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
+                          'Best Validation Perplexity: %.2f, Best Val Neg Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
                           'Throughput: %.2f examples/sec'
                 print(
                     log_str %
                     (epoch, b, len(train_data), args.lr, args.q_lr, train_q_entropy / num_sents,
                      np.exp(-total_sent_ll / num_words), -total_sent_ll / num_words,
                      np.exp(-total_sent_iwae_ll / num_words), -total_sent_iwae_ll / num_words,
-                     best_val_ppl, best_val_ll, kl_pen, num_sents / (time.time() - start_time)))
+                     best_val_ppl, -best_val_ll, kl_pen, num_sents / (time.time() - start_time)))
                 sent_str = [
                     train_data.idx2word[word_idx]
                     for word_idx in list(sents[-1][1:-1].cpu().numpy())
@@ -330,7 +330,6 @@ def tg_main(args):
                 wandb.log({'lr': args.lr})
                 wandb.log({'q_lr': args.q_lr})
                 wandb.log({'Average train_q_entropy': train_q_entropy / num_sents})
-                wandb.log({'Train Aver PPL for OBJ': torch.exp(final_loss)})
                 wandb.log({'Train Aver OBJ (should be maximized)': obj})
                 wandb.log({'Train Aver PPL for TG LOG LL': np.exp(-total_sent_ll / num_words)})
                 wandb.log({'Train Aver TG Log Likelihood': -total_sent_ll / num_words})
@@ -362,6 +361,9 @@ def tg_main(args):
                 'idx2word': train_data.idx2word
             }
             print('Saving checkpoint to %s' % args.save_path)
+            # if save_path is not created, it will be created
+            if not os.path.exists(os.path.dirname(args.save_path)):
+                os.makedirs(os.path.dirname(args.save_path))
             torch.save(checkpoint, args.save_path)
             model.cuda(device=device)
         else:  # ppl is not decreasing
