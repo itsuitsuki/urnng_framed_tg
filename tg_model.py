@@ -514,6 +514,13 @@ class TransformerGrammar(nn.Module):
         core_out = self.dropout(core_out)
 
 
+        # ELBO loss = -E_q[log p(x|z)] + KL(q(z|x) || p(z))
+        # Monte Carlo Estimation of ELBO: -1/N * sum(log p(x|z)) + KL(q(z|x) || p(z))
+        # We use the first term as the loss of p-net here.
+        # The second term is the KL divergence between q(z|x) and p(z), 
+        # which is not computed in this submodel.
+        # The first term needs to be meaned.
+
         # NOTE: "batch_size" here is batch_size*sample in outer training.
         
          
@@ -524,15 +531,10 @@ class TransformerGrammar(nn.Module):
         logits_flatten = logits.view(-1, self.vocab_size) # shape: (seq_len * batch_size, vocab_size)
         crit = nn.CrossEntropyLoss(reduction='none', ignore_index=self.pad_id)
         loss = crit(logits_flatten, targets_flatten) # (seq_len * bs, )
-        # ELBO loss = -E_q[log p(x|z)] + KL(q(z|x) || p(z))
-        # Monte Carlo Estimation of ELBO: -1/N * sum(log p(x|z)) + KL(q(z|x) || p(z))
-        # We use the first term as the loss of p-net here.
-        # The second term is the KL divergence between q(z|x) and p(z), 
-        # which is not computed in this submodel.
-        # The first term needs to be meaned.
+
         loss = loss.view(targets.size(0), targets.size(1)) # shape: (seq_len, batch_size)
         # loss = loss.sum(0) # shape: (batch_size, ) <-> loss = loss.mean(0) ??
-        loss = loss.sum(0) # shape: (batch_size, )
+        loss = loss.sum(0) # shape: (batch_size, )   (bs*samples, )
         return loss
 
 
@@ -850,7 +852,7 @@ class TransformerGrammarPlusQNet(nn.Module):
         inputs = np.array(inputs)
         labels = np.array(labels)
 
-        inp = torch.LongTensor(inputs.T).cuda()  # l_inp * B, where B=batch_size*seq_len
+        inp = torch.LongTensor(inputs.T).cuda()  # l_inp * B, where B=batch_size*samples
         tgt = torch.LongTensor(labels.T).cuda()  # l_tgt(=l_inp) * B
         tgt_len = tgt.size(0)
         inp_len = inp.size(0)

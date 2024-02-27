@@ -239,15 +239,17 @@ def tg_main(args):
             if length == 1:
                 # we ignore length 1 sents during training/eval since we work with binary trees only
                 continue
-            sents = sents.cuda(device=device)  
+            sents = sents.cuda(device=device)
             b += 1
             q_optimizer.zero_grad()
             optimizer.zero_grad()
             if args.mode == 'unsupervised':
                 log_ll_p, ll_action_q, all_actions, q_entropy = model.forward(sents, samples=samples, has_eos=True)
+                print(ll_action_q.shape)
                 # q_entropy: shape: (batch_size * samples, )
                 # q_entropy = q_entropy.contiguous().view(samples, batch_size) # (samples, batch_size)
                 # q_entropy = q_entropy.mean(0) # (batch_size, )
+                # ll_action_q: shape: (batch_size, samples)
                 
                 # ll_p: likelihood of p-net generation, evaluated by q-target
                 # obj = likelihood_p.mean(1)
@@ -256,24 +258,23 @@ def tg_main(args):
                 # train_q_entropy += q_entropy.sum().item()
                 # log_f = likelihood_p + kl_pen*ll_action_p 
                 # iwae_ll = log_f.mean(1).detach() + kl_pen*q_entropy.detach() # shape: (batch_size * samples, )
-                log_ll_p = log_ll_p.contiguous().view(samples, batch_size) # (samples, batch_size)
-                obj = log_ll_p # shape: (batch_size * samples, )
-                obj = obj.contiguous().view(batch_size, samples) # (batch_size, samples)
+                log_ll_p = log_ll_p.contiguous().view(batch_size, samples) # (batch_size, samples)
+                obj = log_ll_p # (batch_size, samples)
                 obj = obj.mean(1)  # shape: (batch_size, )
                 obj = obj.mean()
                 if epoch <= args.train_q_epochs and step <= args.train_q_steps:
                     obj += kl_pen*q_entropy.mean()
                 # baseline = torch.zeros_like(log_f)
                 # baseline_k = torch.zeros_like(log_f)
-                baseline = torch.zeros_like(log_ll_p) # (samples, batch_size)
-                baseline_out_of_k = torch.zeros_like(log_ll_p) # (samples, batch_size)
+                baseline = torch.zeros_like(log_ll_p) # (batch_size, samples)
+                baseline_out_of_k = torch.zeros_like(log_ll_p) # (batch_size, samples)
                 for k in range(samples):
                     baseline_out_of_k.copy_(log_ll_p)
-                    baseline_out_of_k[k].fill_(0)
-                    baseline[k] =  baseline_out_of_k.detach().sum() / (samples - 1)
-                diff = (log_ll_p - baseline).detach().contiguous().view(-1)
-                ll_action_q = ll_action_q.contiguous().view(-1)
-                obj += ((diff) * ll_action_q).mean()
+                    baseline_out_of_k[:, k].fill_(0)
+                    baseline[:, k] = baseline_out_of_k.detach().sum(1) / (samples - 1)
+
+                diff = (log_ll_p - baseline).detach() # (batch_size, samples)
+                obj += (diff * ll_action_q).mean()
                 # obj += ((likelihood_p.detach() - baseline.detach()) * ll_action_q).mean()
                 # kl = (ll_action_q - ll_action_p).mean(1).detach()
                 train_q_entropy += q_entropy.sum().item()
