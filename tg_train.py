@@ -228,6 +228,7 @@ def tg_main(args):
         num_words = 0.
         total_sent_ll = 0.
         total_sent_obj = 0.
+        total_sent_iwae_ll = 0.
         b = 0.
         tqdm_pbar = tqdm(total=len(train_data))
         for i in np.random.permutation(len(train_data)): # one step
