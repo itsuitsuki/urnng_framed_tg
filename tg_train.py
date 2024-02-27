@@ -210,7 +210,7 @@ def tg_main(args):
                             count_eos_ppl=args.count_eos_ppl)
     best_val_ppl = np.exp(-best_val_ll)
     print('-' * 50)
-    print('Initial Validation PPL: %.2f, Initial Validation Log Likelihood: %.2f' % (best_val_ppl, best_val_ll))
+    print('Initial Validation PPL: %.2f, Initial Validation IWAE Log Likelihood: %.2f' % (best_val_ppl, best_val_ll))
     all_stats = [[0, 0, 0]]  # true pos, false pos, false neg for f1 calc
      
     # 2. 开始训练, 一共训练 args.num_epochs 轮
@@ -262,6 +262,7 @@ def tg_main(args):
                 obj = log_ll_p # (batch_size, samples)
                 obj = obj.mean(1)  # shape: (batch_size, )
                 obj = obj.mean()
+                iwae_ll = log_ll_p.mean(1).detach() + kl_pen*q_entropy.detach() # shape: (batch_size, )
                 if epoch <= args.train_q_epochs and step <= args.train_q_steps:
                     obj += kl_pen*q_entropy.mean()
                 # baseline = torch.zeros_like(log_f)
@@ -292,14 +293,13 @@ def tg_main(args):
             if args.q_max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(q_params, args.q_max_grad_norm)
             
-                
-            
             q_optimizer.step()
             optimizer.step()
             num_sents += batch_size
             num_words += batch_size * length
-            total_sent_ll += log_ll_p.sum().item()
+            total_sent_ll += log_ll_p.mean(1).sum().item() # shape: (batch_size, )
             total_sent_obj += obj.item()
+            total_sent_iwae_ll = iwae_ll.sum().item()
             for bb in range(batch_size):
                 action = list(all_actions[bb].long().cpu().numpy())
                 span_b = get_spans(action)
@@ -308,13 +308,15 @@ def tg_main(args):
                 update_stats(span_b_set, [set(gold_spans[bb][:-1])], all_stats)
             if b % args.print_every == 0:
                 log_str = 'Train Info: Epoch: %d, Batch: %d/%d, LR: %.4f, qLR: %.5f, Training Aver qEntropy: %.4f, ' + \
-                          'Train Aver PPL for TG: %.2f, Train Aver TG Log Likelihood: %.2f, ' + \
+                          'Train Aver PPL for TG LOG LL: %.2f, Train Aver TG Neg LOG LL: %.2f, ' + \
+                          'Train Aver IWAE PPL: %.2f, Train Aver IWAE Neg Log Likelihood: %.2f,' + \
                           'Best Validation Perplexity: %.2f, Best Val Log Likelihood: %.2f, KL Penalty: %.4f, ' + \
                           'Throughput: %.2f examples/sec'
                 print(
                     log_str %
                     (epoch, b, len(train_data), args.lr, args.q_lr, train_q_entropy / num_sents,
-                     np.exp(-total_sent_ll / num_sents), total_sent_ll / num_sents,
+                     np.exp(-total_sent_ll / num_words), -total_sent_ll / num_words,
+                     np.exp(-total_sent_iwae_ll / num_words), -total_sent_iwae_ll / num_words,
                      best_val_ppl, best_val_ll, kl_pen, num_sents / (time.time() - start_time)))
                 sent_str = [
                     train_data.idx2word[word_idx]
@@ -327,10 +329,12 @@ def tg_main(args):
                 wandb.log({'lr': args.lr})
                 wandb.log({'q_lr': args.q_lr})
                 wandb.log({'Average train_q_entropy': train_q_entropy / num_sents})
-                wandb.log({'Average Train PPL for OBJ': torch.exp(final_loss)})
-                wandb.log({'Average Train OBJ (TO BE MAX)': obj})
-                wandb.log({'Average Train PPL for TG Log LL': torch.exp(-log_ll_p.mean())})
-                wandb.log({'Average Train TG Log Likelihood': log_ll_p.mean()})
+                wandb.log({'Train Aver PPL for OBJ': torch.exp(final_loss)})
+                wandb.log({'Train Aver OBJ (should be maximized)': obj})
+                wandb.log({'Train Aver PPL for TG LOG LL': np.exp(-total_sent_ll / num_words)})
+                wandb.log({'Train Aver TG Log Likelihood': -total_sent_ll / num_words})
+                wandb.log({'Train Aver IWAE PPL': np.exp(-total_sent_iwae_ll / num_words)})
+                wandb.log({'Train Aver IWAE Neg Log Likelihood': -total_sent_iwae_ll / num_words})
                 wandb.log({'KL Penalty': kl_pen})
         print('--------------------------------')
         print('Checking validation performance...')
@@ -340,12 +344,12 @@ def tg_main(args):
                         count_eos_ppl=args.count_eos_ppl)
         val_ppl = np.exp(-val_ll)
         print("Val PPL: ", val_ppl)
-        print("Val Log Likelihood: ", val_ll)
+        print("Val IWAE Log Likelihood: ", val_ll)
         if args.wandb:
             wandb.log({'Validation Perplexity': val_ppl})
-            wandb.log({'Validation Log Likelihood': val_ll})
+            wandb.log({'Validation IWAE Log Likelihood': val_ll})
             wandb.log({'Best Validation Perplexity': best_val_ppl})
-            wandb.log({'Best Log Likelihood': best_val_ll})
+            wandb.log({'Best IWAE Log Likelihood': best_val_ll})
         print('--------------------------------')
         if val_ll > best_val_ll:
             best_val_ppl = val_ppl
@@ -379,10 +383,15 @@ def tg_eval_only_log_likeli(data, model: TransformerGrammarPlusQNet, samples=5, 
     # print("Data length: ", len(data))
     # sample : mc_sample. for iwae calculation
     model.eval()
-    # num_sents = 0
-    # num_words = 0
-    mean_log_ll = 0.
-    total_log_ll = 0.
+    num_sents = 0
+    num_words = 0
+    mean_iwae_ll = 0.
+    total_iwae_ll = 0.
+    if args.kl_cost_annealing_warmup > 0:
+        kl_pen = 0.
+        kl_ann_every_batch = 1. / (args.kl_cost_annealing_warmup * len(data))
+    else:
+        kl_pen = 1.
     # print_data_bool = False
     with torch.no_grad():
         for i in list(reversed(range(len(data)))):
@@ -396,19 +405,21 @@ def tg_eval_only_log_likeli(data, model: TransformerGrammarPlusQNet, samples=5, 
                 sents = sents[:, :-1]
                 tree_length = length
             sents = sents.cuda()
+            if args.kl_cost_annealing_warmup > 0:
+                kl_pen = min(args.kl_pen_max, kl_pen + kl_ann_every_batch)
             log_likelihood, likeli_action_q_all, all_actions, q_entropy = model.forward(
                 sents, samples=samples, has_eos=count_eos_ppl == 1)
             # log likelihood is i.e. ll, shape: (batch_size * samples, )
             # likeli_action_q_all, shape: (batch_size * samples, )
             log_likelihood = log_likelihood.contiguous().view(batch_size, samples)
-            log_likelihood = log_likelihood.mean(1) # (batch_size, )
-            # num_sents += batch_size
-            # num_words += batch_size * length
-            batch_log_ll_mean = log_likelihood.mean()
-            total_log_ll += batch_log_ll_mean
-    mean_log_ll = total_log_ll / len(data)
+            iwae_ll = log_likelihood.mean(1).detach() + kl_pen * q_entropy.detach()            
+            num_sents += batch_size
+            num_words += batch_size * length
+            batch_sent_iwae_ll = iwae_ll.sum().item()
+            total_iwae_ll += batch_sent_iwae_ll
+    mean_iwae_ll = total_iwae_ll / num_words
     model.train()
-    return mean_log_ll.item()
+    return mean_iwae_ll
 
 
 if __name__ == '__main__':
