@@ -279,7 +279,7 @@ def tg_main(args):
                 # obj += ((likelihood_p.detach() - baseline.detach()) * ll_action_q).mean()
                 # kl = (ll_action_q - ll_action_p).mean(1).detach()
                 train_q_entropy += q_entropy.sum().item()
-                log_ll_p = log_ll_p.mean(0) # shape: (batch_size, )
+                log_ll_p = log_ll_p.mean(1) # shape: (batch_size, )
             else:
                 raise NotImplementedError # NOTE: WE DON'T NEED SUPERVISED VERSION
             final_loss = -obj
@@ -297,7 +297,7 @@ def tg_main(args):
             optimizer.step()
             num_sents += batch_size
             num_words += batch_size * length
-            total_sent_ll += log_ll_p.mean(1).sum().item() # shape: (batch_size, )
+            total_sent_ll += log_ll_p.sum().item() # shape: (batch_size, )
             total_sent_obj += obj.item()
             total_sent_iwae_ll = iwae_ll.sum().item()
             for bb in range(batch_size):
