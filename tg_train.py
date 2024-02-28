@@ -43,15 +43,15 @@ parser.add_argument('--d_head',
                     help='Dimension of Attention Heads.')
 parser.add_argument(
     '--d_inner',
-    default=900,
+    default=256,
     type=int,
     help='Dimension of Inner Layer in Position-wise Feedforward Net.')
 parser.add_argument('--dropoutatt',
-                    default=0.2,
+                    default=0.1,
                     type=float,
                     help='Dropout rate for Attention Layer.')
 parser.add_argument('--q_dim',
-                    default=300,
+                    default=256,
                     type=int,
                     help='Hidden dimension for Leaf LSTM in Q Inference Net')
 
@@ -64,7 +64,7 @@ parser.add_argument('--save_path',
                     default='./ckpt/tg.pt',
                     help='where to save the data')
 parser.add_argument('--num_epochs',
-                    default=5,
+                    default=10,
                     type=int,
                     help='number of training epochs')
 parser.add_argument(
@@ -77,7 +77,7 @@ parser.add_argument('--mode',
                     type=str,
                     choices=['unsupervised', 'supervised'])
 parser.add_argument('--eval_samples',
-                    default=3,
+                    default=4,
                     type=int,
                     help='how many samples for evaluation Monte Carlo Sampling')
 parser.add_argument('--samples',
@@ -97,7 +97,7 @@ parser.add_argument('--lr_decay',
                     type=float,
                     help='After warmup_epochs, we have lr decayed by this param.')
 parser.add_argument('--kl_cost_annealing_warmup',
-                    default=1.2,
+                    default=2,
                     type=int,
                     help='KL Cost Annealing, trying to solve KL Vanishing Problem i.e. Posterior Collapse')
 parser.add_argument('--kl_pen_max',
