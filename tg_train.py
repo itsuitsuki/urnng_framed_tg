@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import time
+import time, os
 
 import torch
 from torch import cuda
