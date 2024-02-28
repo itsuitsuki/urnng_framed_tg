@@ -113,11 +113,11 @@ parser.add_argument('--param_init',
 parser.add_argument('--max_grad_norm',
                     default=0,
                     type=float,
-                    help='gradient clipping parameter')
+                    help='gradient clipping parameter, <=0 values means no grad clipping')
 parser.add_argument('--q_max_grad_norm',
                     default=1,
                     type=float,
-                    help='gradient clipping parameter for q')
+                    help='gradient clipping parameter for q,  <=0 values means no grad clipping')
 parser.add_argument('--gpu', default=0, type=int, help='which gpu to use')
 parser.add_argument('--seed', default=3407, type=int, help='random seed')
 parser.add_argument('--print_every',
@@ -361,10 +361,14 @@ def tg_main(args):
                 'idx2word': train_data.idx2word
             }
             print('Saving checkpoint to %s' % args.save_path)
-            # if save_path is not created, it will be created
-            if not os.path.exists(os.path.dirname(args.save_path)):
-                os.makedirs(os.path.dirname(args.save_path))
-            torch.save(checkpoint, args.save_path)
+            try:
+                # if save_path is not created, it will be created
+                if not os.path.exists(os.path.dirname(args.save_path)):
+                    os.makedirs(os.path.dirname(args.save_path))
+                torch.save(checkpoint, args.save_path)
+            except Exception as e:
+                print(f"Exception: {e}")
+                print('Error occurs when saving model, skipping...')
             model.cuda(device=device)
         else:  # ppl is not decreasing
             if epoch > args.warmup_epochs:
